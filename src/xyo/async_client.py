@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -123,7 +124,8 @@ class AsyncClient:
         response = await self._send_request("GET", validated_url, headers=headers)
         self._ensure_success(response)
 
-        return decompress_tar_gz_in_memory(
+        return await asyncio.to_thread(
+            decompress_tar_gz_in_memory,
             response.content,
             max_archive_bytes=self.config.max_archive_bytes,
             max_entry_bytes=self.config.max_entry_bytes,

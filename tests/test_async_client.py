@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import tarfile
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -17,6 +19,7 @@ from xyo import (
     XyoClientException,
     XyoServerException,
 )
+from xyo.streaming import decompress_tar_gz_in_memory
 
 
 def create_tar_gz_bytes(entries: list[tuple[str, dict | str]]) -> bytes:
@@ -180,3 +183,47 @@ async def test_async_stream_enrichment_collection_http_error_handling() -> None:
                     pass
             assert exc_info.value.status_code == 404
             assert "Archive not found" in exc_info.value.message
+
+
+@pytest.mark.asyncio
+async def test_async_download_enrichment_collection_offloaded_to_thread() -> None:
+    record = {"merchant": "Async Download Test"}
+    tar_bytes = create_tar_gz_bytes([("test.json", record)])
+
+    with respx.mock(base_url="https://download.xyo.financial") as respx_mock:
+        respx_mock.get("/batches/12345.tar.gz").mock(return_value=httpx.Response(200, content=tar_bytes))
+
+        with patch("asyncio.to_thread", wraps=asyncio.to_thread) as mock_to_thread:
+            async with AsyncClient(api_key="xyo_async_test_key") as client:
+                records = await client.download_enrichment_collection(
+                    "https://download.xyo.financial/batches/12345.tar.gz"
+                )
+                assert len(records) == 1
+                assert records[0].merchant == "Async Download Test"
+                mock_to_thread.assert_called_once()
+                assert mock_to_thread.call_args[0][0] is decompress_tar_gz_in_memory
+
+
+@pytest.mark.asyncio
+async def test_async_download_enrichment_collection_non_blocking_event_loop() -> None:
+    record = {"merchant": "Async Non Blocking Test"}
+    tar_bytes = create_tar_gz_bytes([("test.json", record)])
+
+    with respx.mock(base_url="https://download.xyo.financial") as respx_mock:
+        respx_mock.get("/batches/12345.tar.gz").mock(return_value=httpx.Response(200, content=tar_bytes))
+
+        ticks = 0
+
+        async def background_counter() -> None:
+            nonlocal ticks
+            for _ in range(5):
+                await asyncio.sleep(0.001)
+                ticks += 1
+
+        bg_task = asyncio.create_task(background_counter())
+        async with AsyncClient(api_key="xyo_async_test_key") as client:
+            records = await client.download_enrichment_collection("https://download.xyo.financial/batches/12345.tar.gz")
+
+        await bg_task
+        assert len(records) == 1
+        assert ticks == 5
