@@ -1,4 +1,4 @@
-# 💳 XYO Financial Python Client SDK
+# XYO.Financial SDK for Python
 
 [![CI / Build & Test](https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml/badge.svg)](https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml)
 [![PyPI version](https://img.shields.io/pypi/v/xyo-sdk.svg)](https://pypi.org/project/xyo-sdk/)
