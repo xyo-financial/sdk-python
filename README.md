@@ -1,10 +1,18 @@
 # XYO.Financial SDK for Python
 
-[![CI / Build & Test](https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml/badge.svg)](https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml)
-[![PyPI version](https://img.shields.io/pypi/v/xyo-sdk.svg)](https://pypi.org/project/xyo-sdk/)
-[![Python Versions](https://img.shields.io/pypi/pyversions/xyo-sdk.svg)](https://pypi.org/project/xyo-sdk/)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Security Policy](https://img.shields.io/badge/Security-LTS_Guaranteed-10B981)](SECURITY.md)
+<p align="center">
+    <a href="https://xyo.financial" target="_blank"><img alt="Python Mascot for XYO.Financial" width="420" src="https://raw.githubusercontent.com/xyo-financial/sdk-python/main/docs/mascot.png" /></a>
+    <br/>
+    <b>Enterprise Financial Transaction Enrichment SDK for Python</b>
+</p>
+
+<p align="center">
+    <a href="https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml"><img src="https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml/badge.svg" alt="CI / Build & Test" /></a>
+    <a href="https://pypi.org/project/xyo-sdk/"><img src="https://img.shields.io/pypi/v/xyo-sdk.svg" alt="PyPI version" /></a>
+    <a href="https://pypi.org/project/xyo-sdk/"><img src="https://img.shields.io/pypi/pyversions/xyo-sdk.svg" alt="Python Versions" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License" /></a>
+    <a href="SECURITY.md"><img src="https://img.shields.io/badge/Security-LTS_Guaranteed-10B981" alt="Security Policy" /></a>
+</p>
 
 Official, institutional-grade Python Client SDK for the **[XYO Financial](https://xyo.financial)** AI Transaction Enrichment Platform. Built for Data Engineers, ML Engineers, and Fintech Backend Developers demanding high throughput, dual sync/async ergonomics, zero memory leaks, and enterprise-grade resilience.
 
