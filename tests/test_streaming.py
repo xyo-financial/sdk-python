@@ -13,6 +13,7 @@ import respx
 
 from xyo import AsyncClient, Client, XyoClientException
 from xyo.streaming import (
+    _ChunkReader,
     decompress_tar_gz_in_memory,
     stream_tar_gz_chunks,
     stream_tar_gz_chunks_async,
@@ -231,3 +232,31 @@ def test_max_tar_entries_exceeded_rejected() -> None:
         decompress_tar_gz_in_memory(tar_gz_bytes, max_tar_entries=2)
     assert exc_info.value.status_code == 422
     assert "exceeds maximum entry count" in exc_info.value.message
+
+
+def test_chunk_reader_readinto_buffer_types() -> None:
+    chunks = [b"hello", b" ", b"world"]
+    reader = _ChunkReader(iter(chunks), max_archive_bytes=100)
+    assert reader.readable() is True
+
+    # Test with bytearray
+    buf1 = bytearray(5)
+    n1 = reader.readinto(buf1)
+    assert n1 == 5
+    assert bytes(buf1) == b"hello"
+
+    # Test with memoryview (next chunk is b" ")
+    arr = bytearray(10)
+    mview = memoryview(arr)
+    n2 = reader.readinto(mview)
+    assert n2 == 1
+    assert bytes(arr[:1]) == b" "
+
+    # Test with memoryview (next chunk is b"world")
+    n3 = reader.readinto(mview)
+    assert n3 == 5
+    assert bytes(arr[:5]) == b"world"
+
+    # Test EOF
+    n4 = reader.readinto(buf1)
+    assert n4 == 0
