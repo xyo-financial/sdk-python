@@ -1,0 +1,104 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "xyo-sdk"
+version = "2.0.0"
+description = "Official institutional-grade Python client SDK for XYO Financial transaction enrichment API."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+authors = [
+    { name = "Syniol Limited", email = "support@syniol.com" },
+]
+keywords = [
+    "xyo",
+    "financial",
+    "banking",
+    "fintech",
+    "transaction",
+    "enrichment",
+    "ai",
+    "merchant",
+    "mcc",
+    "iso3166",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Office/Business :: Financial",
+    "Typing :: Typed",
+]
+dependencies = [
+    "httpx>=0.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "respx>=0.21.0",
+    "ruff>=0.4.0",
+    "mypy>=1.9.0",
+]
+
+[project.urls]
+Homepage = "https://xyo.financial"
+Documentation = "https://xyo.financial"
+Repository = "https://github.com/xyo-financial/sdk-python"
+Changelog = "https://github.com/xyo-financial/sdk-python/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/xyo"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+addopts = "-v --cov=xyo --cov-report=term-missing --cov-report=xml"
+
+[tool.coverage.run]
+source = ["src/xyo"]
+omit = [
+    "*/_generated/*",
+    "*/tests/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+extend-exclude = [
+    "src/xyo/_generated",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501", "N818"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+exclude = [
+    "^src/xyo/_generated/.*$",
+]

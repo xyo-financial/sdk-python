@@ -1,0 +1,126 @@
+"""Tests for RFC 7807 problem details and exception hierarchies."""
+
+from __future__ import annotations
+
+import httpx
+import pytest
+import respx
+
+from xyo import (
+    APIError,
+    Client,
+    ErrorResponse,
+    XyoClientException,
+    XyoException,
+    XyoNetworkException,
+    XyoProblemDetailsException,
+    XyoServerException,
+)
+
+
+def test_rfc7807_problem_details_parsing() -> None:
+    problem_json = {
+        "type": "https://api.xyo.financial/errors/validation-error",
+        "title": "Invalid Request Parameters",
+        "status": 422,
+        "detail": "The transaction content or country code is invalid.",
+        "instance": "/errors/req_998877",
+        "errors": {
+            "countryCode": ["Must be an ISO 3166-1 alpha-2 format"],
+        },
+    }
+
+    with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
+        respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
+            return_value=httpx.Response(422, json=problem_json)
+        )
+
+        with Client(api_key="xyo_test_key") as client:
+            with pytest.raises(XyoProblemDetailsException) as exc_info:
+                client.enrich_transaction("COSTA", "GB")
+
+            ex = exc_info.value
+            assert ex.status_code == 422
+            assert ex.type == "https://api.xyo.financial/errors/validation-error"
+            assert ex.title == "Invalid Request Parameters"
+            assert ex.status == 422
+            assert ex.detail == "The transaction content or country code is invalid."
+            assert ex.instance == "/errors/req_998877"
+            assert "countryCode" in ex.errors
+            assert ex.errors["countryCode"] == ["Must be an ISO 3166-1 alpha-2 format"]
+
+
+def test_error_aliases_compatibility() -> None:
+    """Verifies that ErrorResponse and APIError aliases work for acceptance criteria."""
+    assert issubclass(ErrorResponse, XyoClientException)
+    assert issubclass(APIError, XyoException)
+
+
+def test_http_401_auth_exception() -> None:
+    with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
+        respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
+            return_value=httpx.Response(401, json={"title": "Unauthorized", "detail": "Invalid API token."})
+        )
+
+        with Client(api_key="invalid_token") as client:
+            with pytest.raises(XyoClientException) as exc_info:
+                client.enrich_transaction("COSTA", "GB")
+
+            assert exc_info.value.status_code == 401
+            assert exc_info.value.is_auth()
+            assert not exc_info.value.is_rate_limited()
+            assert not exc_info.value.is_not_found()
+
+
+def test_http_404_not_found_exception() -> None:
+    with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
+        respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
+            return_value=httpx.Response(404, json={"title": "Not Found", "detail": "Resource not found."})
+        )
+
+        with Client(api_key="token") as client:
+            with pytest.raises(XyoClientException) as exc_info:
+                client.enrich_transaction("COSTA", "GB")
+
+            assert exc_info.value.status_code == 404
+            assert exc_info.value.is_not_found()
+
+
+def test_http_429_rate_limited_exception() -> None:
+    with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
+        respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
+            return_value=httpx.Response(429, json={"title": "Too Many Requests", "detail": "Rate limit exceeded."})
+        )
+
+        with Client(api_key="token") as client:
+            with pytest.raises(XyoClientException) as exc_info:
+                client.enrich_transaction("COSTA", "GB")
+
+            assert exc_info.value.status_code == 429
+            assert exc_info.value.is_rate_limited()
+
+
+def test_http_500_server_exception_is_retryable() -> None:
+    with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
+        respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
+            return_value=httpx.Response(502, text="Bad Gateway")
+        )
+
+        with Client(api_key="token") as client:
+            with pytest.raises(XyoServerException) as exc_info:
+                client.enrich_transaction("COSTA", "GB")
+
+            assert exc_info.value.status_code == 502
+            assert exc_info.value.is_retryable()
+
+
+def test_network_exception() -> None:
+    net_ex = XyoNetworkException("DNS resolution failed")
+    assert net_ex.is_retryable
+    assert "DNS" in str(net_ex)
+
+
+def test_problem_details_non_json_fallback() -> None:
+    ex = XyoProblemDetailsException.from_json(400, "non-json error message")
+    assert ex.status_code == 400
+    assert "[HTTP 400] non-json error message" in ex.message

@@ -1,0 +1,131 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  verify-tag:
+    name: Verify Tag Integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify Tag is on main Branch
+        run: |
+          git branch -r --contains ${{ github.ref_name }} | grep -E "origin/main" || {
+            echo "Error: Tag must be pushed from the main branch."
+            exit 1;
+          }
+
+  test:
+    name: Run Quality Gates & Tests
+    needs: verify-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev]
+
+      - name: Run Tests
+        run: pytest
+
+  publish-release:
+    name: Publish Release & Artifacts
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip build twine
+
+      # 1. Build PyPI distribution packages
+      - name: Build sdist and wheel
+        run: python -m build
+
+      # 2. Build Source Archive
+      - name: Build Archive
+        run: |
+          git archive --format=tar.gz --prefix=sdk-python-${{ github.ref_name }}/ -o sdk-python-${{ github.ref_name }}.tar.gz HEAD
+
+      # 3. Generate Checksums
+      - name: Generate SHA-256 Checksum
+        run: |
+          sha256sum sdk-python-${{ github.ref_name }}.tar.gz > sdk-python-${{ github.ref_name }}.tar.gz.sha256
+          sha256sum dist/* > dist/pypi-checksums.sha256
+
+      # 4. Generate SBOM (Software Bill of Materials)
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          format: 'spdx-json'
+          output-file: 'sdk-python-${{ github.ref_name }}.spdx.json'
+
+      # 5. Generate GitHub Attestation
+      - name: Generate Artifact Attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: 'sdk-python-${{ github.ref_name }}.tar.gz'
+
+      # 6. Create GitHub Release with Assets
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            sdk-python-${{ github.ref_name }}.tar.gz
+            sdk-python-${{ github.ref_name }}.tar.gz.sha256
+            sdk-python-${{ github.ref_name }}.spdx.json
+            dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+      # 7. Publish to PyPI (if trusted publishing / token configured)
+      - name: Publish package distributions to PyPI
+        if: env.PYPI_API_TOKEN != ''
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true
+
+  verify-example:
+    name: Verify Example Script
+    needs: publish-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install SDK & Run Example
+        run: |
+          pip install .
+          python examples/quickstart_sync.py

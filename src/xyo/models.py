@@ -1,0 +1,139 @@
+"""Data models and request/response payloads for the XYO Python SDK."""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from typing import Any
+
+from xyo.exceptions import XyoClientException
+
+_COUNTRY_CODE_RE = re.compile(r"^[A-Za-z]{2}$")
+
+
+@dataclass
+class EnrichmentRequest:
+    """Request payload for synchronous or asynchronous transaction enrichment.
+
+    Attributes:
+        content: Payment description narrative (maximum 128 characters).
+        country_code: ISO 3166-1 alpha-2 two-character country code (e.g. 'GB', 'US').
+    """
+
+    content: str
+    country_code: str
+
+    def __post_init__(self) -> None:
+        if not self.content or not self.content.strip():
+            raise XyoClientException(400, "Transaction content cannot be null, empty, or whitespace.")
+        if len(self.content) > 128:
+            raise XyoClientException(
+                400,
+                f"Transaction content exceeds maximum length of 128 characters (got {len(self.content)} chars).",
+            )
+        if not self.country_code or not self.country_code.strip():
+            raise XyoClientException(400, "Country code cannot be null, empty, or whitespace.")
+
+        trimmed = self.country_code.strip()
+        if not _COUNTRY_CODE_RE.match(trimmed):
+            raise XyoClientException(
+                400,
+                f"Invalid country code '{self.country_code}'. Must be a 2-letter ISO 3166-1 alpha-2 country code.",
+            )
+        self.country_code = trimmed.upper()
+
+    def to_dict(self) -> dict[str, str]:
+        """Converts model to OpenAPI camelCase wire payload."""
+        return {
+            "content": self.content,
+            "countryCode": self.country_code,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> EnrichmentRequest:
+        """Instantiates EnrichmentRequest from dictionary."""
+        return cls(
+            content=data.get("content", ""),
+            country_code=data.get("countryCode") or data.get("country_code", ""),
+        )
+
+
+@dataclass
+class EnrichmentResponse:
+    """Enriched merchant metadata and categorization response.
+
+    Attributes:
+        merchant: Clean merchant name.
+        description: Brief editorial summary of the merchant.
+        categories: Hierarchical category tags.
+        logo: Data URI or CDN URL representing merchant logo.
+        location: City and country descriptor.
+        address: Exact purchase street address if available.
+    """
+
+    merchant: str
+    description: str
+    categories: list[str] = field(default_factory=list)
+    logo: str = ""
+    location: str = ""
+    address: str = ""
+
+    @property
+    def name(self) -> str:
+        """Alias for merchant name."""
+        return self.merchant
+
+    @property
+    def category(self) -> str:
+        """Returns primary category tag."""
+        return self.categories[0] if self.categories else ""
+
+    @property
+    def country_code(self) -> str:
+        """Extracts country code from location if available."""
+        if "," in self.location:
+            return self.location.split(",")[-1].strip()
+        return self.location.strip()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> EnrichmentResponse:
+        """Instantiates EnrichmentResponse from dictionary."""
+        cats = data.get("categories", [])
+        if isinstance(cats, str):
+            cats = [cats]
+        return cls(
+            merchant=data.get("merchant") or data.get("name", ""),
+            description=data.get("description", ""),
+            categories=cats,
+            logo=data.get("logo", ""),
+            location=data.get("location", ""),
+            address=data.get("address", ""),
+        )
+
+
+@dataclass
+class EnrichTransactionCollectionResponse:
+    """Batch submission response containing tracking ID and download link."""
+
+    id: str
+    link: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> EnrichTransactionCollectionResponse:
+        return cls(
+            id=data.get("id", ""),
+            link=data.get("link", ""),
+        )
+
+
+@dataclass
+class EnrichmentCollectionStatusResponse:
+    """Batch enrichment job processing lifecycle status."""
+
+    status: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> EnrichmentCollectionStatusResponse:
+        return cls(
+            status=data.get("status", ""),
+        )
