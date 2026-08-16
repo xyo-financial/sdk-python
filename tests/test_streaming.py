@@ -5,13 +5,18 @@ from __future__ import annotations
 import io
 import json
 import tarfile
+from collections.abc import Iterator
 
 import httpx
 import pytest
 import respx
 
 from xyo import AsyncClient, Client, XyoClientException
-from xyo.streaming import decompress_tar_gz_in_memory
+from xyo.streaming import (
+    decompress_tar_gz_in_memory,
+    stream_tar_gz_chunks,
+    stream_tar_gz_chunks_async,
+)
 
 
 def create_mock_tar_gz(entries: list[tuple[str, dict | str | bytes]]) -> bytes:
@@ -100,6 +105,65 @@ async def test_stream_enrichment_collection_async() -> None:
             records = await client.download_enrichment_collection("https://download.xyo.financial/batches/12345.tar.gz")
             assert len(records) == 1
             assert records[0].merchant == "TfL"
+
+
+def test_decompress_tar_gz_in_memory_accepts_fileobj() -> None:
+    tar_gz_bytes = create_mock_tar_gz([("test.json", {"merchant": "Greggs"})])
+    bio = io.BytesIO(tar_gz_bytes)
+    results = decompress_tar_gz_in_memory(bio)
+    assert len(results) == 1
+    assert results[0].merchant == "Greggs"
+
+
+def test_stream_tar_gz_chunks_true_streaming() -> None:
+    record1 = {"merchant": "Merchant A"}
+    record2 = {"merchant": "Merchant B"}
+    tar_gz_bytes = create_mock_tar_gz([("a.json", record1), ("b.json", record2)])
+
+    def chunk_generator() -> Iterator[bytes]:
+        for i in range(0, len(tar_gz_bytes), 16):
+            yield tar_gz_bytes[i : i + 16]
+
+    streamed = list(stream_tar_gz_chunks(chunk_generator()))
+    assert len(streamed) == 2
+    assert streamed[0].merchant == "Merchant A"
+    assert streamed[1].merchant == "Merchant B"
+
+
+def test_stream_tar_gz_chunks_archive_limit_exceeded() -> None:
+    tar_gz_bytes = create_mock_tar_gz([("a.json", {"merchant": "M"})])
+
+    def chunk_generator() -> Iterator[bytes]:
+        yield tar_gz_bytes
+
+    with pytest.raises(XyoClientException) as exc_info:
+        list(stream_tar_gz_chunks(chunk_generator(), max_archive_bytes=10))
+    assert exc_info.value.status_code == 422
+    assert "exceeded maximum allowed byte size" in exc_info.value.message
+
+
+@pytest.mark.asyncio
+async def test_stream_tar_gz_chunks_async_archive_limit_exceeded() -> None:
+    tar_gz_bytes = create_mock_tar_gz([("a.json", {"merchant": "M"})])
+
+    async def async_chunks():
+        yield tar_gz_bytes
+
+    with pytest.raises(XyoClientException) as exc_info:
+        async for _ in stream_tar_gz_chunks_async(async_chunks(), max_archive_bytes=10):
+            pass
+    assert exc_info.value.status_code == 422
+    assert "exceeded maximum allowed byte size" in exc_info.value.message
+
+
+def test_decompression_bomb_cwe_409_bounded_read() -> None:
+    large_payload = {"merchant": "X" * 200}
+    tar_gz_bytes = create_mock_tar_gz([("large.json", large_payload)])
+
+    with pytest.raises(XyoClientException) as exc_info:
+        decompress_tar_gz_in_memory(tar_gz_bytes, max_entry_bytes=50)
+    assert exc_info.value.status_code == 422
+    assert "exceeds" in exc_info.value.message
 
 
 def test_zip_slip_path_traversal_rejected() -> None:

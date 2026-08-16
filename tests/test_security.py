@@ -76,3 +76,15 @@ def test_validate_api_user_crlf_rejected() -> None:
         validate_api_user("user\r\nInjected-Header: evil")
     assert exc_info.value.status_code == 400
     assert "CRLF injection" in exc_info.value.message
+
+
+def test_validate_default_headers_crlf_rejected() -> None:
+    from xyo.config import ClientConfig
+
+    with pytest.raises(ValueError) as exc_info:
+        ClientConfig(default_headers={"Header-Name\r\n": "valid-value"})
+    assert "CRLF injection" in str(exc_info.value)
+
+    with pytest.raises(ValueError) as exc_info:
+        ClientConfig(default_headers={"Header-Name": "value\ninjection"})
+    assert "CRLF injection" in str(exc_info.value)

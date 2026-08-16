@@ -165,3 +165,18 @@ async def test_async_dynamic_token_supplier() -> None:
         async with AsyncClient(config=config) as client:
             await client.enrich_transaction("COSTA", "GB")
             assert route.calls.last.request.headers["Authorization"] == "Bearer async_vault_secret"
+
+
+@pytest.mark.asyncio
+async def test_async_stream_enrichment_collection_http_error_handling() -> None:
+    with respx.mock(base_url="https://download.xyo.financial") as respx_mock:
+        respx_mock.get("/batches/notfound.tar.gz").mock(return_value=httpx.Response(404, text="Archive not found"))
+
+        async with AsyncClient(api_key="key") as client:
+            with pytest.raises(XyoClientException) as exc_info:
+                async for _ in client.stream_enrichment_collection(
+                    "https://download.xyo.financial/batches/notfound.tar.gz"
+                ):
+                    pass
+            assert exc_info.value.status_code == 404
+            assert "Archive not found" in exc_info.value.message
