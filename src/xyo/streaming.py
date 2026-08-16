@@ -5,9 +5,17 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import sys
 import tarfile
 from collections.abc import AsyncIterator, Iterator
-from typing import Any, BinaryIO
+from typing import TYPE_CHECKING, BinaryIO
+
+if sys.version_info >= (3, 12):
+    from collections.abc import Buffer
+elif TYPE_CHECKING:
+    from typing_extensions import Buffer
+else:
+    Buffer = object
 
 from xyo.exceptions import XyoClientException
 from xyo.models import EnrichmentResponse
@@ -116,7 +124,7 @@ class _ChunkReader(io.RawIOBase):
     def readable(self) -> bool:
         return True
 
-    def readinto(self, b: Any) -> int:
+    def readinto(self, b: Buffer) -> int:
         while not self._buffer:
             try:
                 chunk = next(self._iterator)
@@ -130,8 +138,9 @@ class _ChunkReader(io.RawIOBase):
                 )
             self._buffer = chunk
 
-        n = min(len(b), len(self._buffer))
-        b[:n] = self._buffer[:n]
+        buf = memoryview(b)
+        n = min(len(buf), len(self._buffer))
+        buf[:n] = self._buffer[:n]
         self._buffer = self._buffer[n:]
         return n
 
