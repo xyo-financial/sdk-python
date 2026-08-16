@@ -3,7 +3,7 @@
 <p align="center">
     <a href="https://xyo.financial" target="_blank"><img alt="Python Mascot for XYO.Financial" width="420" src="docs/mascot.png" /></a>
     <br/>
-    <b>Enterprise Financial Transaction Enrichment SDK for Python</b>
+    <b>Financial Transaction Enrichment SDK for Python</b>
 </p>
 
 <p align="center">
@@ -228,7 +228,7 @@ with Client(api_key="xyo_token") as client:
 
 ---
 
-## 🔒 Enterprise Security & Defensive Architecture
+## 🔒 Security & Defensive Architecture
 
 - **Zero-Trust Domain Egress Allowlist:** Validates all archive download URLs against pinned official domains (`api.xyo.financial`, `download.xyo.financial`, AWS S3 storage hosts) and strictly rejects cleartext HTTP.
 - **Credential Leakage Prevention:** Strips Bearer authorization headers when following download links to third-party or S3 storage buckets.
