@@ -44,6 +44,9 @@ class ClientConfig:
         self.base_url = self.base_url.rstrip("/")
         if self.correlation_id and _CRLF_RE.search(self.correlation_id):
             raise ValueError("Correlation ID contains forbidden CRLF injection characters (CWE-113).")
+        for key, val in self.default_headers.items():
+            if _CRLF_RE.search(str(key)) or _CRLF_RE.search(str(val)):
+                raise ValueError(f"Default header '{key}' contains forbidden CRLF injection characters (CWE-113).")
 
     def resolve_token(self) -> str:
         """Resolves the Bearer token synchronously, evaluating token_supplier if configured."""

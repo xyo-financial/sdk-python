@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import tarfile
 from collections.abc import AsyncIterator, Iterator
+from typing import Any, BinaryIO
 
 from xyo.exceptions import XyoClientException
 from xyo.models import EnrichmentResponse
@@ -24,67 +26,114 @@ def _sanitize_entry_name(name: str) -> None:
         raise XyoClientException(400, f"Path traversal detected in archive entry name: '{name}'.")
 
 
+def _read_and_parse_entry(
+    tar: tarfile.TarFile,
+    member: tarfile.TarInfo,
+    max_entry_bytes: int,
+) -> EnrichmentResponse | None:
+    """Safely extracts and parses a single JSON entry with CWE-409 decompression bomb defense."""
+    _sanitize_entry_name(member.name)
+
+    if not member.isfile() or not member.name.lower().endswith(".json"):
+        return None
+
+    if member.size > max_entry_bytes:
+        raise XyoClientException(
+            422,
+            f"Tar entry '{member.name}' exceeds maximum size limit ({max_entry_bytes} bytes). Decompression bomb rejected.",
+        )
+
+    extracted = tar.extractfile(member)
+    if extracted is None:
+        return None
+
+    content = extracted.read(max_entry_bytes + 1)
+    if len(content) > max_entry_bytes:
+        raise XyoClientException(
+            422,
+            f"Tar entry '{member.name}' decompressed size exceeds limit ({max_entry_bytes} bytes). Decompression bomb rejected.",
+        )
+
+    try:
+        payload = json.loads(content.decode("utf-8"))
+        return EnrichmentResponse.from_dict(payload)
+    except Exception as ex:
+        raise XyoClientException(
+            422,
+            f"Failed to deserialize JSON record from archive entry '{member.name}': {ex}",
+        ) from ex
+
+
 def decompress_tar_gz_in_memory(
-    archive_bytes: bytes,
+    archive_input: bytes | io.IOBase | BinaryIO,
     max_archive_bytes: int = 104_857_600,
     max_entry_bytes: int = 10_485_760,
     max_tar_entries: int = 50_000,
 ) -> list[EnrichmentResponse]:
     """Decompresses and parses a .tar.gz archive in memory with zero disk I/O and strict safety limits."""
-    if len(archive_bytes) > max_archive_bytes:
-        raise XyoClientException(
-            422,
-            f"Archive download exceeded maximum allowed byte size ({max_archive_bytes} bytes). Decompression bomb rejected.",
-        )
+    fileobj: io.IOBase | BinaryIO
+    if isinstance(archive_input, bytes):
+        if len(archive_input) > max_archive_bytes:
+            raise XyoClientException(
+                422,
+                f"Archive download exceeded maximum allowed byte size ({max_archive_bytes} bytes). Decompression bomb rejected.",
+            )
+        fileobj = io.BytesIO(archive_input)
+    else:
+        fileobj = archive_input
+        if hasattr(fileobj, "seek"):
+            with contextlib.suppress(io.UnsupportedOperation, AttributeError):
+                fileobj.seek(0)
 
     results: list[EnrichmentResponse] = []
-    bio = io.BytesIO(archive_bytes)
-
     try:
-        with tarfile.open(fileobj=bio, mode="r:gz") as tar:
-            entry_count = 0
-            for member in tar:
-                entry_count += 1
+        with tarfile.open(fileobj=fileobj, mode="r|gz") as tar:
+            for entry_count, member in enumerate(tar, start=1):
                 if entry_count > max_tar_entries:
                     raise XyoClientException(
                         422,
                         f"Tar archive exceeds maximum entry count limit ({max_tar_entries} entries). Possible tar bomb DoS attack.",
                     )
 
-                _sanitize_entry_name(member.name)
-
-                if not member.isfile() or not member.name.lower().endswith(".json"):
-                    continue
-
-                if member.size > max_entry_bytes:
-                    raise XyoClientException(
-                        422,
-                        f"Tar entry '{member.name}' exceeds maximum size limit ({max_entry_bytes} bytes). Decompression bomb rejected.",
-                    )
-
-                extracted = tar.extractfile(member)
-                if extracted is None:
-                    continue
-
-                content = extracted.read()
-                if len(content) > max_entry_bytes:
-                    raise XyoClientException(
-                        422,
-                        f"Tar entry '{member.name}' decompressed size exceeds limit ({max_entry_bytes} bytes).",
-                    )
-
-                try:
-                    payload = json.loads(content.decode("utf-8"))
-                    results.append(EnrichmentResponse.from_dict(payload))
-                except Exception as ex:
-                    raise XyoClientException(
-                        422,
-                        f"Failed to deserialize JSON record from archive entry '{member.name}': {ex}",
-                    ) from ex
+                record = _read_and_parse_entry(tar, member, max_entry_bytes)
+                if record is not None:
+                    results.append(record)
     except tarfile.TarError as ex:
         raise XyoClientException(422, f"Corrupted or invalid tar archive: {ex}") from ex
 
     return results
+
+
+class _ChunkReader(io.RawIOBase):
+    """Raw IO stream wrapping an Iterator[bytes] with archive size ceiling enforcement."""
+
+    def __init__(self, iterator: Iterator[bytes], max_archive_bytes: int) -> None:
+        self._iterator = iterator
+        self._max_archive_bytes = max_archive_bytes
+        self._buffer = b""
+        self._total_bytes = 0
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, b: Any) -> int:
+        while not self._buffer:
+            try:
+                chunk = next(self._iterator)
+            except StopIteration:
+                return 0
+            self._total_bytes += len(chunk)
+            if self._total_bytes > self._max_archive_bytes:
+                raise XyoClientException(
+                    422,
+                    f"Archive download exceeded maximum allowed byte size ({self._max_archive_bytes} bytes). Decompression bomb rejected.",
+                )
+            self._buffer = chunk
+
+        n = min(len(b), len(self._buffer))
+        b[:n] = self._buffer[:n]
+        self._buffer = self._buffer[n:]
+        return n
 
 
 def stream_tar_gz_chunks(
@@ -93,21 +142,24 @@ def stream_tar_gz_chunks(
     max_entry_bytes: int = 10_485_760,
     max_tar_entries: int = 50_000,
 ) -> Iterator[EnrichmentResponse]:
-    """Streams and yields enrichment records on-the-fly from incoming byte chunks."""
-    buffer = io.BytesIO()
-    total_bytes = 0
+    """Streams and yields enrichment records on-the-fly from incoming byte chunks using true stream parsing."""
+    raw_reader = _ChunkReader(chunk_iterator, max_archive_bytes=max_archive_bytes)
+    buffered_stream = io.BufferedReader(raw_reader)
 
-    for chunk in chunk_iterator:
-        total_bytes += len(chunk)
-        if total_bytes > max_archive_bytes:
-            raise XyoClientException(
-                422,
-                f"Archive download exceeded maximum allowed byte size ({max_archive_bytes} bytes).",
-            )
-        buffer.write(chunk)
+    try:
+        with tarfile.open(fileobj=buffered_stream, mode="r|gz") as tar:
+            for entry_count, member in enumerate(tar, start=1):
+                if entry_count > max_tar_entries:
+                    raise XyoClientException(
+                        422,
+                        f"Tar archive exceeds maximum entry count limit ({max_tar_entries} entries). Possible tar bomb DoS attack.",
+                    )
 
-    buffer.seek(0)
-    yield from decompress_tar_gz_in_memory(buffer.getvalue(), max_archive_bytes, max_entry_bytes, max_tar_entries)
+                record = _read_and_parse_entry(tar, member, max_entry_bytes)
+                if record is not None:
+                    yield record
+    except tarfile.TarError as ex:
+        raise XyoClientException(422, f"Corrupted or invalid tar archive: {ex}") from ex
 
 
 async def stream_tar_gz_chunks_async(
@@ -125,10 +177,15 @@ async def stream_tar_gz_chunks_async(
         if total_bytes > max_archive_bytes:
             raise XyoClientException(
                 422,
-                f"Archive download exceeded maximum allowed byte size ({max_archive_bytes} bytes).",
+                f"Archive download exceeded maximum allowed byte size ({max_archive_bytes} bytes). Decompression bomb rejected.",
             )
         buffer.write(chunk)
 
     buffer.seek(0)
-    for record in decompress_tar_gz_in_memory(buffer.getvalue(), max_archive_bytes, max_entry_bytes, max_tar_entries):
+    for record in decompress_tar_gz_in_memory(
+        buffer,
+        max_archive_bytes=max_archive_bytes,
+        max_entry_bytes=max_entry_bytes,
+        max_tar_entries=max_tar_entries,
+    ):
         yield record

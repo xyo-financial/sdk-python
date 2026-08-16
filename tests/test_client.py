@@ -157,3 +157,22 @@ def test_dynamic_token_supplier() -> None:
             assert call_count == 2
             assert route.calls[0].request.headers["Authorization"] == "Bearer dynamic_key_1"
             assert route.calls[1].request.headers["Authorization"] == "Bearer dynamic_key_2"
+
+
+def test_stream_enrichment_collection_http_error_handling() -> None:
+    with respx.mock(base_url="https://download.xyo.financial") as respx_mock:
+        respx_mock.get("/batches/notfound.tar.gz").mock(return_value=httpx.Response(404, text="Archive not found"))
+
+        with Client(api_key="key") as client:
+            with pytest.raises(XyoClientException) as exc_info:
+                list(client.stream_enrichment_collection("https://download.xyo.financial/batches/notfound.tar.gz"))
+            assert exc_info.value.status_code == 404
+            assert "Archive not found" in exc_info.value.message
+
+
+def test_client_config_crlf_headers_rejected() -> None:
+    with pytest.raises(ValueError, match="CRLF injection"):
+        ClientConfig(default_headers={"X-Custom\r\nInjected": "val"})
+
+    with pytest.raises(ValueError, match="CRLF injection"):
+        ClientConfig(default_headers={"X-Custom": "val\r\nInjected: true"})
