@@ -1,7 +1,7 @@
 # XYO.Financial SDK for Python
 
 <p align="center">
-    <a href="https://xyo.financial" target="_blank"><img alt="Python Mascot for XYO.Financial" width="420" src="https://raw.githubusercontent.com/xyo-financial/sdk-python/main/docs/mascot.png" /></a>
+    <a href="https://xyo.financial" target="_blank"><img alt="Python Mascot for XYO.Financial" width="420" src="docs/mascot.png" /></a>
     <br/>
     <b>Enterprise Financial Transaction Enrichment SDK for Python</b>
 </p>
