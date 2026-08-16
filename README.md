@@ -1,20 +1,24 @@
-# XYO.Financial SDK for Python
+<p align="center">
+  <a href="https://xyo.financial" target="_blank" rel="noopener noreferrer">
+    <img alt="XYO Financial Python Mascot" width="380" src="docs/mascot.png" />
+  </a>
+</p>
+
+<h1 align="center">XYO Financial SDK for Python</h1>
 
 <p align="center">
-    <a href="https://xyo.financial" target="_blank"><img alt="Python Mascot for XYO.Financial" width="420" src="docs/mascot.png" /></a>
-    <br/>
-    <b>Financial Transaction Enrichment SDK for Python</b>
+  <a href="https://pypi.org/project/xyo-sdk/"><img src="https://img.shields.io/pypi/v/xyo-sdk.svg?style=flat-square&color=blue" alt="PyPI Version" /></a>
+  <a href="https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml"><img src="https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml/badge.svg?branch=main" alt="CI / Build & Test" /></a>
+  <img src="https://img.shields.io/badge/Python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-3776AB?logo=python&logoColor=white" alt="Python Versions" />
+  <img src="https://img.shields.io/badge/Typing-Strict%20MyPy-blue" alt="Strict Typing" />
+  <img src="https://img.shields.io/badge/RFC_7807-Compliant-brightgreen" alt="RFC 7807" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License" /></a>
 </p>
 
 <p align="center">
-    <a href="https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml"><img src="https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml/badge.svg" alt="CI / Build & Test" /></a>
-    <a href="https://pypi.org/project/xyo-sdk/"><img src="https://img.shields.io/pypi/v/xyo-sdk.svg" alt="PyPI version" /></a>
-    <a href="https://pypi.org/project/xyo-sdk/"><img src="https://img.shields.io/pypi/pyversions/xyo-sdk.svg" alt="Python Versions" /></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License" /></a>
-    <a href="SECURITY.md"><img src="https://img.shields.io/badge/Security-LTS_Guaranteed-10B981" alt="Security Policy" /></a>
+  <strong>The official Python SDK for <a href="https://xyo.financial">XYO Financial</a>.</strong><br>
+  Seamlessly enrich raw financial transactions into clean merchant profiles, intelligent business categorizations, high-res logos, and geolocated address metadata using AI-powered enrichment pipelines.
 </p>
-
-Official, institutional-grade Python Client SDK for the **[XYO Financial](https://xyo.financial)** AI Transaction Enrichment Platform. Built for Data Engineers, ML Engineers, and Fintech Backend Developers demanding high throughput, dual sync/async ergonomics, zero memory leaks, and enterprise-grade resilience.
 
 ---
 
