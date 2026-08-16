@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import tarfile
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -144,10 +146,86 @@ def test_stream_tar_gz_chunks_archive_limit_exceeded() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stream_tar_gz_chunks_async_success() -> None:
+    record1 = {"merchant": "Merchant A", "category": "Shopping"}
+    record2 = {"merchant": "Merchant B", "category": "Dining"}
+    tar_gz_bytes = create_mock_tar_gz([("a.json", record1), ("b.json", record2)])
+
+    async def async_chunks() -> AsyncIterator[bytes]:
+        for i in range(0, len(tar_gz_bytes), 32):
+            yield tar_gz_bytes[i : i + 32]
+
+    results = []
+    async for record in stream_tar_gz_chunks_async(async_chunks()):
+        results.append(record)
+
+    assert len(results) == 2
+    assert results[0].merchant == "Merchant A"
+    assert results[1].merchant == "Merchant B"
+
+
+@pytest.mark.asyncio
+async def test_stream_tar_gz_chunks_async_offloaded_to_thread() -> None:
+    record = {"merchant": "Async Offload Test"}
+    tar_gz_bytes = create_mock_tar_gz([("test.json", record)])
+
+    async def async_chunks() -> AsyncIterator[bytes]:
+        yield tar_gz_bytes
+
+    with patch("asyncio.to_thread", wraps=asyncio.to_thread) as mock_to_thread:
+        results = []
+        async for item in stream_tar_gz_chunks_async(async_chunks()):
+            results.append(item)
+
+        assert len(results) == 1
+        assert results[0].merchant == "Async Offload Test"
+        mock_to_thread.assert_called_once()
+        assert mock_to_thread.call_args[0][0] is decompress_tar_gz_in_memory
+
+
+@pytest.mark.asyncio
+async def test_stream_tar_gz_chunks_async_corrupted_archive_propagates() -> None:
+    async def async_chunks() -> AsyncIterator[bytes]:
+        yield b"not a valid tar gz stream"
+
+    with pytest.raises(XyoClientException) as exc_info:
+        async for _ in stream_tar_gz_chunks_async(async_chunks()):
+            pass
+    assert exc_info.value.status_code == 422
+    assert "Corrupted or invalid tar archive" in exc_info.value.message
+
+
+@pytest.mark.asyncio
+async def test_stream_tar_gz_chunks_async_non_blocking_event_loop() -> None:
+    record = {"merchant": "Non Blocking Test"}
+    tar_gz_bytes = create_mock_tar_gz([("nb.json", record)])
+
+    async def async_chunks() -> AsyncIterator[bytes]:
+        yield tar_gz_bytes
+
+    ticks = 0
+
+    async def background_counter() -> None:
+        nonlocal ticks
+        for _ in range(5):
+            await asyncio.sleep(0.001)
+            ticks += 1
+
+    bg_task = asyncio.create_task(background_counter())
+    results = []
+    async for item in stream_tar_gz_chunks_async(async_chunks()):
+        results.append(item)
+
+    await bg_task
+    assert len(results) == 1
+    assert ticks == 5
+
+
+@pytest.mark.asyncio
 async def test_stream_tar_gz_chunks_async_archive_limit_exceeded() -> None:
     tar_gz_bytes = create_mock_tar_gz([("a.json", {"merchant": "M"})])
 
-    async def async_chunks():
+    async def async_chunks() -> AsyncIterator[bytes]:
         yield tar_gz_bytes
 
     with pytest.raises(XyoClientException) as exc_info:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import io
 import json
@@ -191,10 +192,12 @@ async def stream_tar_gz_chunks_async(
         buffer.write(chunk)
 
     buffer.seek(0)
-    for record in decompress_tar_gz_in_memory(
+    records = await asyncio.to_thread(
+        decompress_tar_gz_in_memory,
         buffer,
         max_archive_bytes=max_archive_bytes,
         max_entry_bytes=max_entry_bytes,
         max_tar_entries=max_tar_entries,
-    ):
+    )
+    for record in records:
         yield record
