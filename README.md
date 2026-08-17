@@ -95,7 +95,9 @@ with Client(api_key="xyo_live_your_api_key_here") as client:
 
 ```python
 import asyncio
+
 from xyo import AsyncClient
+
 
 async def main():
     async with AsyncClient(api_key="xyo_live_your_api_key_here") as client:
@@ -104,6 +106,7 @@ async def main():
             country_code="GB",
         )
         print(f"Merchant: {response.merchant} ({response.category})")
+
 
 asyncio.run(main())
 ```
@@ -193,7 +196,9 @@ Integrate `AsyncXyoClient` into high-performance FastAPI microservices using idi
 ```python
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, HTTPException
+
 from xyo import AsyncXyoClient, EnrichmentRequest, EnrichmentResponse, XyoProblemDetailsException
 
 
@@ -236,8 +241,10 @@ Process transaction streams asynchronously within worker queues (Celery, RQ, Dra
 
 ```python
 import logging
+
 from celery import shared_task
 from django.db import transaction
+
 from xyo import Client, EnrichmentRequest, XyoNetworkException, XyoProblemDetailsException, XyoServerException
 
 logger = logging.getLogger(__name__)
@@ -275,15 +282,17 @@ def enrich_transaction_task(self, transaction_id: str) -> dict:
                 txn.logo_url = enriched.logo
                 txn.location_address = enriched.address
                 txn.is_enriched = True
-                txn.save(update_fields=[
-                    "merchant_name",
-                    "clean_description",
-                    "category",
-                    "categories",
-                    "logo_url",
-                    "location_address",
-                    "is_enriched",
-                ])
+                txn.save(
+                    update_fields=[
+                        "merchant_name",
+                        "clean_description",
+                        "category",
+                        "categories",
+                        "logo_url",
+                        "location_address",
+                        "is_enriched",
+                    ]
+                )
 
             return {"status": "success", "merchant": enriched.merchant}
 
@@ -301,6 +310,7 @@ Decompressing large `.tar.gz` archives in bulk processing pipelines is CPU-bound
 
 ```python
 import asyncio
+
 from xyo import AsyncXyoClient, EnrichmentResponse
 
 
@@ -325,7 +335,7 @@ async def process_bulk_settlement_feed(download_url: str) -> None:
 The SDK throws strongly-typed exceptions conforming to the RFC 7807 Problem Details specification:
 
 ```python
-from xyo import Client, XyoProblemDetailsException, XyoServerException, XyoNetworkException
+from xyo import Client, XyoNetworkException, XyoProblemDetailsException, XyoServerException
 
 with Client(api_key="xyo_token") as client:
     try:
