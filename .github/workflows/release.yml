@@ -103,11 +103,8 @@ jobs:
           draft: false
           prerelease: false
 
-      # 7. Publish to PyPI (if trusted publishing / token configured)
+      # 7. Publish to PyPI
       - name: Publish package distributions to PyPI
-        if: env.PYPI_API_TOKEN != ''
-        env:
-          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
