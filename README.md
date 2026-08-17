@@ -91,41 +91,21 @@ with Client(api_key="xyo_live_your_api_key_here") as client:
     print(f"Address:     {response.address}")
 ```
 
----
-
-## ⚡ Asynchronous Integration (FastAPI & Starlette)
+### 2. Asynchronous Enrichment
 
 ```python
-from fastapi import FastAPI, Depends, HTTPException
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator
-from xyo import AsyncClient, XyoProblemDetailsException
+import asyncio
+from xyo import AsyncClient
 
-client: AsyncClient | None = None
+async def main():
+    async with AsyncClient(api_key="xyo_live_your_api_key_here") as client:
+        response = await client.enrich_transaction(
+            content="SQ *COSTA COFFEE GREENWICH",
+            country_code="GB",
+        )
+        print(f"Merchant: {response.merchant} ({response.category})")
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    global client
-    client = AsyncClient(api_key="xyo_live_api_token")
-    yield
-    await client.close()
-
-
-app = FastAPI(lifespan=lifespan)
-
-
-@app.post("/api/enrich")
-async def enrich_payment(narrative: str, country_code: str):
-    try:
-        enriched = await client.enrich_transaction(narrative, country_code)
-        return {
-            "merchant": enriched.merchant,
-            "categories": enriched.categories,
-            "logo": enriched.logo,
-        }
-    except XyoProblemDetailsException as ex:
-        raise HTTPException(status_code=ex.status, detail=ex.detail)
+asyncio.run(main())
 ```
 
 ---
@@ -200,6 +180,142 @@ def get_secret_from_vault() -> str:
 
 config = ClientConfig(token_supplier=get_secret_from_vault)
 client = Client(config=config)
+```
+
+---
+
+## 🚀 Framework & Architecture Integration
+
+### 1. FastAPI Dependency Injection & Lifespan Management
+
+Integrate `AsyncXyoClient` into high-performance FastAPI microservices using idiomatic dependency injection or lifespan application-state pooling:
+
+```python
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from fastapi import Depends, FastAPI, HTTPException
+from xyo import AsyncXyoClient, EnrichmentRequest, EnrichmentResponse, XyoProblemDetailsException
+
+
+# Option A: Request-scoped dependency injection (yield client context)
+async def get_xyo_client() -> AsyncGenerator[AsyncXyoClient, None]:
+    async with AsyncXyoClient(api_key="xyo_live_your_api_key_here") as client:
+        yield client
+
+
+# Option B: Application lifespan singleton with shared connection pool (Recommended for high concurrency)
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    app.state.xyo_client = AsyncXyoClient(api_key="xyo_live_your_api_key_here")
+    yield
+    await app.state.xyo_client.close()
+
+
+app = FastAPI(title="Payment Enrichment Service", lifespan=lifespan)
+
+
+def get_shared_xyo_client() -> AsyncXyoClient:
+    return app.state.xyo_client
+
+
+@app.post("/enrich", response_model=EnrichmentResponse)
+async def enrich_transaction(
+    request: EnrichmentRequest,
+    xyo: AsyncXyoClient = Depends(get_xyo_client),
+) -> EnrichmentResponse:
+    """Enrich a single banking transaction narrative."""
+    try:
+        return await xyo.enrich_transaction(request)
+    except XyoProblemDetailsException as ex:
+        raise HTTPException(status_code=ex.status, detail=ex.detail) from ex
+```
+
+### 2. Django & Celery Distributed Background Worker Pattern
+
+Process transaction streams asynchronously within worker queues (Celery, RQ, Dramatiq) with automatic exponential backoff retries and atomic database persistence:
+
+```python
+import logging
+from celery import shared_task
+from django.db import transaction
+from xyo import Client, EnrichmentRequest, XyoNetworkException, XyoProblemDetailsException, XyoServerException
+
+logger = logging.getLogger(__name__)
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(XyoServerException, XyoNetworkException),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+    max_retries=5,
+)
+def enrich_transaction_task(self, transaction_id: str) -> dict:
+    """Background task to enrich ledger transactions with exponential backoff retries."""
+    from payments.models import RawTransaction  # Django ORM Model
+
+    txn = RawTransaction.objects.get(id=transaction_id)
+    if txn.is_enriched:
+        return {"status": "already_enriched", "transaction_id": transaction_id}
+
+    with Client(api_key="xyo_live_your_api_key_here") as xyo:
+        try:
+            req = EnrichmentRequest(
+                content=txn.raw_description,
+                country_code=txn.country_code,
+            )
+            enriched = xyo.enrich_transaction(req)
+
+            with transaction.atomic():
+                txn.merchant_name = enriched.merchant
+                txn.clean_description = enriched.description
+                txn.category = enriched.category
+                txn.categories = enriched.categories
+                txn.logo_url = enriched.logo
+                txn.location_address = enriched.address
+                txn.is_enriched = True
+                txn.save(update_fields=[
+                    "merchant_name",
+                    "clean_description",
+                    "category",
+                    "categories",
+                    "logo_url",
+                    "location_address",
+                    "is_enriched",
+                ])
+
+            return {"status": "success", "merchant": enriched.merchant}
+
+        except XyoProblemDetailsException as ex:
+            # 4xx client validation errors should not be retried
+            logger.error("Non-retryable XYO API validation error: %s (HTTP %d)", ex.detail, ex.status)
+            txn.enrichment_error = ex.detail
+            txn.save(update_fields=["enrichment_error"])
+            raise
+```
+
+### 3. High-Concurrency Non-Blocking AsyncIO & Thread-Offloaded Decompression
+
+Decompressing large `.tar.gz` archives in bulk processing pipelines is CPU-bound. `AsyncXyoClient` ensures the Python AsyncIO event loop remains 100% responsive by offloading archive extraction to background worker threads via `asyncio.to_thread`:
+
+```python
+import asyncio
+from xyo import AsyncXyoClient, EnrichmentResponse
+
+
+async def process_bulk_settlement_feed(download_url: str) -> None:
+    """Download and process high-volume bulk settlement records without blocking the AsyncIO event loop."""
+    async with AsyncXyoClient(api_key="xyo_live_your_api_key_here") as client:
+        # 1. Non-Blocking Thread-Offloaded In-Memory Archive Extraction
+        # Tar/GZip decompression executes in a separate thread pool worker, preventing event-loop freezing
+        records: list[EnrichmentResponse] = await client.download_enrichment_collection(download_url)
+        print(f"Successfully processed {len(records)} records with zero disk writes.")
+
+        # 2. Memory-Safe O(1) Streaming for Gigabyte-Scale Batches
+        # Stream individual records on-the-fly chunk-by-chunk without loading entire archive into RAM
+        async for record in client.stream_enrichment_collection(download_url):
+            await save_record_async(record)
 ```
 
 ---
