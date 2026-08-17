@@ -7,7 +7,7 @@
 <h1 align="center">XYO Financial SDK for Python</h1>
 
 <p align="center">
-  <a href="https://pypi.org/project/xyo-sdk/"><img src="https://img.shields.io/pypi/v/xyo-sdk.svg?style=flat-square&color=blue" alt="PyPI Version" /></a>
+  <a href="https://pypi.org/project/xyo-sdk/"><img src="https://img.shields.io/pypi/v/xyo-sdk?style=flat-square&logo=pypi&logoColor=white&color=blue" alt="PyPI Version" /></a>
   <a href="https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml"><img src="https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml/badge.svg?branch=main" alt="CI / Build & Test" /></a>
   <img src="https://img.shields.io/badge/Python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-3776AB?logo=python&logoColor=white" alt="Python Versions" />
   <img src="https://img.shields.io/badge/Typing-Strict%20MyPy-blue" alt="Strict Typing" />
