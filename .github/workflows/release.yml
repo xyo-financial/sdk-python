@@ -75,7 +75,7 @@ jobs:
       - name: Generate SHA-256 Checksum
         run: |
           sha256sum sdk-python-${{ github.ref_name }}.tar.gz > sdk-python-${{ github.ref_name }}.tar.gz.sha256
-          sha256sum dist/* > dist/pypi-checksums.sha256
+          sha256sum dist/* > pypi-checksums.sha256
 
       # 4. Generate SBOM (Software Bill of Materials)
       - name: Generate SPDX SBOM
@@ -98,6 +98,7 @@ jobs:
             sdk-python-${{ github.ref_name }}.tar.gz
             sdk-python-${{ github.ref_name }}.tar.gz.sha256
             sdk-python-${{ github.ref_name }}.spdx.json
+            pypi-checksums.sha256
             dist/*
           generate_release_notes: true
           draft: false
