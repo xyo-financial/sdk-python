@@ -15,4 +15,3 @@ def test_package_exports() -> None:
     assert "XyoClient" in xyo.__all__
     assert "XyoError" in xyo.__all__
     assert "RateLimitExceededError" in xyo.__all__
-

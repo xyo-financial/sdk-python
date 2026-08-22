@@ -128,4 +128,3 @@ def test_build_download_headers() -> None:
     assert "Authorization" not in h2
     assert h2["X-Correlation-ID"] == "method-corr"
     assert h2["traceparent"] == "method-trace"
-

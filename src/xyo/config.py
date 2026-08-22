@@ -82,4 +82,3 @@ class ClientConfig:
             f"timeout={self.timeout}, correlation_id='{self.correlation_id}', "
             f"traceparent='{self.traceparent}')"
         )
-

@@ -114,7 +114,9 @@ class XyoProblemDetailsException(XyoClientException):
         self.errors = errors or {}
 
     @classmethod
-    def from_json(cls, status_code: int, payload: str, headers: dict[str, str] | None = None) -> XyoProblemDetailsException:
+    def from_json(
+        cls, status_code: int, payload: str, headers: dict[str, str] | None = None
+    ) -> XyoProblemDetailsException:
         """Attempts to parse an RFC 7807 problem details JSON string into a structured exception."""
         rl_info = parse_rate_limit_headers(headers)
         try:
@@ -236,7 +238,9 @@ def parse_rate_limit_headers(headers: Any) -> dict[str, Any]:
 
     retry_after_str = get_val("Retry-After", "retry-after")
     limit_str = get_val("RateLimit-Limit", "ratelimit-limit", "X-RateLimit-Limit", "x-ratelimit-limit")
-    remaining_str = get_val("RateLimit-Remaining", "ratelimit-remaining", "X-RateLimit-Remaining", "x-ratelimit-remaining")
+    remaining_str = get_val(
+        "RateLimit-Remaining", "ratelimit-remaining", "X-RateLimit-Remaining", "x-ratelimit-remaining"
+    )
     reset_str = get_val("RateLimit-Reset", "ratelimit-reset", "X-RateLimit-Reset", "x-ratelimit-reset")
 
     return {
@@ -251,4 +255,3 @@ def parse_rate_limit_headers(headers: Any) -> dict[str, Any]:
 XyoError = XyoException
 ErrorResponse = XyoProblemDetailsException
 APIError = XyoClientException
-

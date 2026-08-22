@@ -118,7 +118,6 @@ def test_http_429_rate_limited_exception() -> None:
             assert ex.headers.get("retry-after") == "60" or ex.headers.get("Retry-After") == "60"
 
 
-
 def test_http_500_server_exception_is_retryable() -> None:
     with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
         respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(

@@ -47,4 +47,3 @@ def create_mock_tar_gz(entries: list[tuple[str, dict[str, Any] | str]]) -> bytes
             ti.size = len(raw_bytes)
             tar.addfile(ti, io.BytesIO(raw_bytes))
     return bio.getvalue()
-

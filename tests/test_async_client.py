@@ -249,4 +249,3 @@ async def test_async_download_enrichment_collection_non_blocking_event_loop() ->
         await bg_task
         assert len(records) == 1
         assert ticks == 5
-

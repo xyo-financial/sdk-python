@@ -35,7 +35,9 @@ def validate_batch_enrichment_requests(
 ) -> list[dict[str, str]]:
     """Validates bulk transaction enrichment batch items and returns list of dictionaries."""
     if not requests or len(requests) < 1:
-        raise XyoClientException(400, "Transaction collection batch cannot be empty. Batch size must be between 1 and 50,000 items.")
+        raise XyoClientException(
+            400, "Transaction collection batch cannot be empty. Batch size must be between 1 and 50,000 items."
+        )
     if len(requests) > MAX_BATCH_ITEMS:
         raise XyoClientException(
             400,
@@ -132,4 +134,3 @@ def _apply_config_headers(
     for k, v in config.default_headers.items():
         if k not in headers:
             headers[k] = v
-

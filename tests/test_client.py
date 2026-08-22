@@ -198,4 +198,3 @@ def test_client_config_crlf_headers_rejected() -> None:
 
     with pytest.raises(ValueError, match="CRLF injection"):
         ClientConfig(default_headers={"X-Custom": "val\r\nInjected: true"})
-
