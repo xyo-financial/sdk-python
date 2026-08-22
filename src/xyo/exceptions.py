@@ -3,7 +3,16 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, TypedDict
+
+
+class RateLimitInfo(TypedDict):
+    """Structured representation of rate limit HTTP response headers."""
+
+    retry_after: float | int | None
+    rate_limit_limit: int | None
+    rate_limit_remaining: int | None
+    rate_limit_reset: float | int | None
 
 
 class XyoException(Exception):
@@ -35,7 +44,7 @@ class XyoClientException(XyoException):
         self.rate_limit_limit = rate_limit_limit
         self.rate_limit_remaining = rate_limit_remaining
         self.rate_limit_reset = rate_limit_reset
-        self.headers = headers or {}
+        self.headers = {k.lower(): v for k, v in headers.items()} if headers else {}
 
     def is_auth(self) -> bool:
         """Returns True if the error is 401 Unauthorized or 403 Forbidden."""
@@ -154,7 +163,7 @@ class XyoProblemDetailsException(XyoClientException):
                     rate_limit_reset=rl_info["rate_limit_reset"],
                     headers=headers,
                 )
-        except Exception:
+        except json.JSONDecodeError:
             pass
 
         sanitized = payload[:512] + "..." if len(payload) > 512 else payload
@@ -198,7 +207,7 @@ class XyoNetworkException(XyoException):
         self.is_retryable = True
 
 
-def parse_rate_limit_headers(headers: Any) -> dict[str, Any]:
+def parse_rate_limit_headers(headers: Any) -> RateLimitInfo:
     """Parses RateLimit and Retry-After HTTP headers into typed numeric values."""
     if not headers:
         return {

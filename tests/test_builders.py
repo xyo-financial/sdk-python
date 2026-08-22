@@ -128,3 +128,14 @@ def test_build_download_headers() -> None:
     assert "Authorization" not in h2
     assert h2["X-Correlation-ID"] == "method-corr"
     assert h2["traceparent"] == "method-trace"
+
+
+def test_crlf_check_with_uuid() -> None:
+    import uuid
+
+    u1 = uuid.uuid4()
+    u2 = uuid.uuid4()
+    cfg = ClientConfig(correlation_id=u1, traceparent=u2)  # type: ignore[arg-type]
+    headers = build_request_headers(cfg, token="test-token", correlation_id=u1, traceparent=u2)
+    assert headers["X-Correlation-ID"] == str(u1)
+    assert headers["traceparent"] == str(u2)

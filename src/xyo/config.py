@@ -6,7 +6,7 @@ import os
 import re
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Any, Callable
 
 _CRLF_RE = re.compile(r"[\r\n]")
 DEFAULT_BASE_URL = "https://api.xyo.financial"
@@ -32,8 +32,8 @@ class ClientConfig:
     api_key: str | None = None
     token_supplier: Callable[[], str | Awaitable[str]] | None = None
     base_url: str = field(default_factory=lambda: os.getenv("XYO_API_BASE_URL", DEFAULT_BASE_URL).rstrip("/"))
-    correlation_id: str | None = None
-    traceparent: str | None = None
+    correlation_id: str | Any | None = None
+    traceparent: str | Any | None = None
     timeout: float = 30.0
     max_archive_bytes: int = 104_857_600  # 100 MiB
     max_entry_bytes: int = 10_485_760  # 10 MiB
@@ -43,9 +43,9 @@ class ClientConfig:
 
     def __post_init__(self) -> None:
         self.base_url = self.base_url.rstrip("/")
-        if self.correlation_id and _CRLF_RE.search(self.correlation_id):
+        if self.correlation_id and _CRLF_RE.search(str(self.correlation_id)):
             raise ValueError("Correlation ID contains forbidden CRLF injection characters (CWE-113).")
-        if self.traceparent and _CRLF_RE.search(self.traceparent):
+        if self.traceparent and _CRLF_RE.search(str(self.traceparent)):
             raise ValueError("Traceparent contains forbidden CRLF injection characters (CWE-113).")
         for key, val in self.default_headers.items():
             if _CRLF_RE.search(str(key)) or _CRLF_RE.search(str(val)):

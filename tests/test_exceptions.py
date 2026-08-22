@@ -142,3 +142,17 @@ def test_problem_details_non_json_fallback() -> None:
     ex = XyoProblemDetailsException.from_json(400, "non-json error message")
     assert ex.status_code == 400
     assert "[HTTP 400] non-json error message" in ex.message
+
+
+def test_normalized_header_keys_in_exceptions() -> None:
+    headers = {"X-RateLimit-Limit": "100", "Content-Type": "application/json"}
+    ex = XyoClientException(400, "Bad Request", headers=headers)
+    assert "x-ratelimit-limit" in ex.headers
+    assert "content-type" in ex.headers
+    assert ex.headers["x-ratelimit-limit"] == "100"
+
+
+def test_problem_details_invalid_json_handling() -> None:
+    ex = XyoProblemDetailsException.from_json(400, "{invalid json body")
+    assert ex.status_code == 400
+    assert "[HTTP 400] {invalid json body" in ex.message

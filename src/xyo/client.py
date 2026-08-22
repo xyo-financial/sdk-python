@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterator, Sequence
 from typing import Any
 
@@ -11,18 +10,14 @@ import httpx
 from xyo._builders import (
     build_download_headers,
     build_request_headers,
+    handle_http_error,
     validate_batch_enrichment_requests,
     validate_single_enrichment_request,
     validate_status_job_id,
 )
 from xyo.config import ClientConfig
 from xyo.exceptions import (
-    RateLimitExceededError,
-    XyoClientException,
     XyoNetworkException,
-    XyoProblemDetailsException,
-    XyoServerException,
-    parse_rate_limit_headers,
 )
 from xyo.models import (
     EnrichmentCollectionStatusResponse,
@@ -223,53 +218,7 @@ class Client:
             ) from ex
 
     def _ensure_success(self, response: httpx.Response) -> None:
-        if response.is_success:
-            return
-
-        status = response.status_code
-        text = response.text
-        resp_headers = dict(response.headers)
-
-        if status >= 500:
-            raise XyoServerException(status, text or f"[HTTP {status}] Server error", raw_body=text)
-
-        if status == 429:
-            rl_info = parse_rate_limit_headers(response.headers)
-            msg = "[HTTP 429] Rate limit exceeded"
-            if text and (text.strip().startswith("{") or text.strip().startswith("[")):
-                try:
-                    data = json.loads(text)
-                    if isinstance(data, dict):
-                        msg = data.get("detail") or data.get("title") or msg
-                except Exception:
-                    pass
-            raise RateLimitExceededError(
-                status_code=429,
-                message=msg,
-                raw_body=text,
-                retry_after=rl_info["retry_after"],
-                rate_limit_limit=rl_info["rate_limit_limit"],
-                rate_limit_remaining=rl_info["rate_limit_remaining"],
-                rate_limit_reset=rl_info["rate_limit_reset"],
-                headers=resp_headers,
-            )
-
-        if status >= 400:
-            if text and (text.strip().startswith("{") or text.strip().startswith("[")):
-                raise XyoProblemDetailsException.from_json(status, text, headers=resp_headers)
-            raise XyoClientException(
-                status,
-                text or f"[HTTP {status}] Client error",
-                raw_body=text,
-                headers=resp_headers,
-            )
-
-        raise XyoClientException(
-            status,
-            f"[HTTP {status}] Unexpected HTTP response",
-            raw_body=text,
-            headers=resp_headers,
-        )
+        handle_http_error(response)
 
     def close(self) -> None:
         """Closes the underlying HTTP client if owned."""
