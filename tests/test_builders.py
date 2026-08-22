@@ -139,3 +139,11 @@ def test_crlf_check_with_uuid() -> None:
     headers = build_request_headers(cfg, token="test-token", correlation_id=u1, traceparent=u2)
     assert headers["X-Correlation-ID"] == str(u1)
     assert headers["traceparent"] == str(u2)
+
+
+def test_build_request_headers_empty_tracing_not_emitted() -> None:
+    cfg = ClientConfig(correlation_id="", traceparent="")
+    headers = build_request_headers(cfg, token="test-token", correlation_id="", traceparent="")
+    assert "X-Correlation-ID" not in headers
+    assert "traceparent" not in headers
+

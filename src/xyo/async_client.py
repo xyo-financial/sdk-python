@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
+from uuid import UUID
 
 import httpx
 
@@ -69,8 +70,8 @@ class AsyncClient:
         self,
         content: str | EnrichmentRequest,
         country_code: str | None = None,
-        correlation_id: str | None = None,
-        traceparent: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> EnrichmentResponse:
         """Asynchronously enriches a single bank transaction narrative."""
         req_dict = validate_single_enrichment_request(content, country_code)
@@ -89,8 +90,8 @@ class AsyncClient:
         self,
         requests: Sequence[EnrichmentRequest | dict[str, Any]],
         api_user: str | None = None,
-        correlation_id: str | None = None,
-        traceparent: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> EnrichTransactionCollectionResponse:
         """Submits an asynchronous batch collection of transactions for high-throughput enrichment."""
         validated_requests = validate_batch_enrichment_requests(requests)
@@ -109,8 +110,8 @@ class AsyncClient:
         self,
         id: str,
         api_user: str | None = None,
-        correlation_id: str | None = None,
-        traceparent: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> EnrichmentCollectionStatusResponse:
         """Queries the lifecycle status of an asynchronous bulk enrichment batch job."""
         quoted_id = validate_status_job_id(id)
@@ -133,8 +134,8 @@ class AsyncClient:
     async def download_enrichment_collection(
         self,
         download_url: str,
-        correlation_id: str | None = None,
-        traceparent: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> list[EnrichmentResponse]:
         """Downloads and decompresses the results .tar.gz archive in memory with zero disk writes."""
         validated_url = self._security_policy.validate_download_url(download_url)
@@ -162,8 +163,8 @@ class AsyncClient:
     async def stream_enrichment_collection(
         self,
         download_url: str,
-        correlation_id: str | None = None,
-        traceparent: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> AsyncIterator[EnrichmentResponse]:
         """Asynchronously streams and yields enrichment records on-the-fly from the bulk results archive."""
         validated_url = self._security_policy.validate_download_url(download_url)

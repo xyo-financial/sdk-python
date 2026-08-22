@@ -133,15 +133,17 @@ def _apply_config_headers(
     eff_trace = traceparent if traceparent is not None else config.traceparent
 
     if eff_corr is not None:
-        eff_corr_str = str(eff_corr)
-        if _CRLF_RE.search(eff_corr_str):
-            raise ValueError("Correlation ID contains forbidden CRLF injection characters (CWE-113).")
-        headers["X-Correlation-ID"] = eff_corr_str
+        eff_corr_str = str(eff_corr).strip()
+        if eff_corr_str:
+            if _CRLF_RE.search(eff_corr_str):
+                raise ValueError("Correlation ID contains forbidden CRLF injection characters (CWE-113).")
+            headers["X-Correlation-ID"] = eff_corr_str
     if eff_trace is not None:
-        eff_trace_str = str(eff_trace)
-        if _CRLF_RE.search(eff_trace_str):
-            raise ValueError("Traceparent contains forbidden CRLF injection characters (CWE-113).")
-        headers["traceparent"] = eff_trace_str
+        eff_trace_str = str(eff_trace).strip()
+        if eff_trace_str:
+            if _CRLF_RE.search(eff_trace_str):
+                raise ValueError("Traceparent contains forbidden CRLF injection characters (CWE-113).")
+            headers["traceparent"] = eff_trace_str
 
     for k, v in config.default_headers.items():
         if k not in headers:
@@ -158,7 +160,14 @@ def handle_http_error(response: httpx.Response) -> None:
     resp_headers = {k.lower(): v for k, v in response.headers.items()}
 
     if status >= 500:
-        raise XyoServerException(status, text or f"[HTTP {status}] Server error", raw_body=text)
+        rl_info = parse_rate_limit_headers(response.headers)
+        raise XyoServerException(
+            status,
+            text or f"[HTTP {status}] Server error",
+            raw_body=text,
+            retry_after=rl_info["retry_after"],
+            headers=resp_headers,
+        )
 
     if status == 429:
         rl_info = parse_rate_limit_headers(response.headers)

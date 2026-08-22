@@ -1,6 +1,7 @@
-"""Tests for RFC 7807 problem details and exception hierarchies."""
-
 from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
 
 import httpx
 import pytest
@@ -17,6 +18,7 @@ from xyo import (
     XyoProblemDetailsException,
     XyoServerException,
 )
+from xyo.exceptions import parse_rate_limit_headers
 
 
 def test_rfc7807_problem_details_parsing() -> None:
@@ -156,3 +158,39 @@ def test_problem_details_invalid_json_handling() -> None:
     ex = XyoProblemDetailsException.from_json(400, "{invalid json body")
     assert ex.status_code == 400
     assert "[HTTP 400] {invalid json body" in ex.message
+
+
+def test_http_500_server_exception_headers_and_retry_after() -> None:
+    headers = {
+        "Retry-After": "30",
+        "X-Correlation-ID": "corr-500-123",
+        "Authorization": "Bearer secret-token",
+    }
+    with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
+        respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
+            return_value=httpx.Response(503, text="Service Unavailable", headers=headers)
+        )
+
+        with Client(api_key="token") as client:
+            with pytest.raises(XyoServerException) as exc_info:
+                client.enrich_transaction("COSTA", "GB")
+
+            ex = exc_info.value
+            assert ex.status_code == 503
+            assert ex.is_retryable()
+            assert ex.retry_after == 30
+            assert ex.headers.get("x-correlation-id") == "corr-500-123"
+            assert "authorization" not in ex.headers
+
+
+def test_parse_rate_limit_headers_rfc9110_http_date() -> None:
+    future = datetime.now(timezone.utc) + timedelta(seconds=120)
+    http_date_str = format_datetime(future, usegmt=True)
+
+    headers = {"Retry-After": http_date_str}
+    rl_info = parse_rate_limit_headers(headers)
+
+    assert rl_info["retry_after"] is not None
+    assert isinstance(rl_info["retry_after"], (int, float))
+    assert 110 <= rl_info["retry_after"] <= 130
+

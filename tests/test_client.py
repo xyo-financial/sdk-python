@@ -67,6 +67,28 @@ def test_enrich_transaction_tracing_headers(mock_enrichment_response_json: dict[
             assert req.headers["traceparent"] == "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 
 
+def test_enrich_transaction_tracing_uuid_headers(mock_enrichment_response_json: dict[str, Any]) -> None:
+    import uuid
+
+    corr_uuid = uuid.uuid4()
+    with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
+        route = respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
+            return_value=httpx.Response(200, json=mock_enrichment_response_json)
+        )
+
+        with Client(api_key="key") as client:
+            client.enrich_transaction(
+                content="COSTA",
+                country_code="GB",
+                correlation_id=corr_uuid,
+            )
+
+            assert route.called
+            req = route.calls.last.request
+            assert req.headers["X-Correlation-ID"] == str(corr_uuid)
+
+
+
 def test_enrich_transaction_validation_errors() -> None:
     with Client(api_key="xyo_test_key_123") as client:
         with pytest.raises(XyoClientException):

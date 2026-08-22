@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import email.utils
 import json
 import warnings
+from datetime import datetime, timezone
 from typing import Any, TypedDict
 
 # Headers safe to surface in exception objects — excludes credentials and PII.
@@ -221,10 +223,14 @@ class XyoServerException(XyoException):
         status_code: int,
         message: str,
         raw_body: str | None = None,
+        retry_after: float | int | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.raw_body = raw_body
+        self.retry_after = retry_after
+        self.headers = {k.lower(): v for k, v in headers.items() if k.lower() in _SAFE_HEADERS} if headers else {}
 
     def is_retryable(self) -> bool:
         """Returns True if the server error is transient and safe to retry."""
@@ -267,7 +273,15 @@ def parse_rate_limit_headers(headers: Any) -> RateLimitInfo:
                 f = float(val)
                 return int(f) if f.is_integer() else f
             except (ValueError, TypeError):
-                pass
+                try:
+                    dt = email.utils.parsedate_to_datetime(val)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    now = datetime.now(timezone.utc)
+                    diff = max(0.0, (dt - now).total_seconds())
+                    return int(diff) if diff.is_integer() else diff
+                except (ValueError, TypeError, AttributeError, IndexError):
+                    pass
         return None
 
     def parse_int(val: str | None) -> int | None:

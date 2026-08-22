@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
 from typing import Any
+from uuid import UUID
 
 import httpx
 
@@ -68,8 +69,8 @@ class Client:
         self,
         content: str | EnrichmentRequest,
         country_code: str | None = None,
-        correlation_id: str | None = None,
-        traceparent: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> EnrichmentResponse:
         """Synchronously enriches a single bank transaction narrative.
 
@@ -98,8 +99,8 @@ class Client:
         self,
         requests: Sequence[EnrichmentRequest | dict[str, Any]],
         api_user: str | None = None,
-        correlation_id: str | None = None,
-        traceparent: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> EnrichTransactionCollectionResponse:
         """Submits an asynchronous batch collection of transactions for high-throughput enrichment.
 
@@ -128,8 +129,8 @@ class Client:
         self,
         id: str,
         api_user: str | None = None,
-        correlation_id: str | None = None,
-        traceparent: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> EnrichmentCollectionStatusResponse:
         """Queries the lifecycle status of an asynchronous bulk enrichment batch job."""
         quoted_id = validate_status_job_id(id)
@@ -152,8 +153,8 @@ class Client:
     def download_enrichment_collection(
         self,
         download_url: str,
-        correlation_id: str | None = None,
-        traceparent: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> list[EnrichmentResponse]:
         """Downloads and decompresses the results .tar.gz archive in memory with zero disk writes."""
         validated_url = self._security_policy.validate_download_url(download_url)
@@ -180,8 +181,8 @@ class Client:
     def stream_enrichment_collection(
         self,
         download_url: str,
-        correlation_id: str | None = None,
-        traceparent: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> Iterator[EnrichmentResponse]:
         """Streams and yields enrichment records on-the-fly from the bulk results archive."""
         validated_url = self._security_policy.validate_download_url(download_url)
