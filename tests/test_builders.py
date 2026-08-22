@@ -146,4 +146,3 @@ def test_build_request_headers_empty_tracing_not_emitted() -> None:
     headers = build_request_headers(cfg, token="test-token", correlation_id="", traceparent="")
     assert "X-Correlation-ID" not in headers
     assert "traceparent" not in headers
-

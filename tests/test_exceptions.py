@@ -193,4 +193,3 @@ def test_parse_rate_limit_headers_rfc9110_http_date() -> None:
     assert rl_info["retry_after"] is not None
     assert isinstance(rl_info["retry_after"], (int, float))
     assert 110 <= rl_info["retry_after"] <= 130
-

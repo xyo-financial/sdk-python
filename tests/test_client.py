@@ -88,7 +88,6 @@ def test_enrich_transaction_tracing_uuid_headers(mock_enrichment_response_json: 
             assert req.headers["X-Correlation-ID"] == str(corr_uuid)
 
 
-
 def test_enrich_transaction_validation_errors() -> None:
     with Client(api_key="xyo_test_key_123") as client:
         with pytest.raises(XyoClientException):
