@@ -3,24 +3,23 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
+from uuid import UUID
 
 import httpx
 
 from xyo._builders import (
     build_download_headers,
     build_request_headers,
+    handle_http_error,
     validate_batch_enrichment_requests,
     validate_single_enrichment_request,
     validate_status_job_id,
 )
 from xyo.config import ClientConfig
 from xyo.exceptions import (
-    XyoClientException,
     XyoNetworkException,
-    XyoProblemDetailsException,
-    XyoServerException,
 )
 from xyo.models import (
     EnrichmentCollectionStatusResponse,
@@ -71,11 +70,15 @@ class AsyncClient:
         self,
         content: str | EnrichmentRequest,
         country_code: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> EnrichmentResponse:
         """Asynchronously enriches a single bank transaction narrative."""
         req_dict = validate_single_enrichment_request(content, country_code)
         token = await self.config.resolve_token_async()
-        headers = build_request_headers(self.config, token=token)
+        headers = build_request_headers(
+            self.config, token=token, correlation_id=correlation_id, traceparent=traceparent
+        )
 
         url = f"{self.config.base_url}/v1/ai/finance/enrichment/transaction"
         response = await self._send_request("POST", url, headers=headers, json=req_dict)
@@ -85,13 +88,17 @@ class AsyncClient:
 
     async def enrich_transactions(
         self,
-        requests: list[EnrichmentRequest | dict[str, Any]],
+        requests: Sequence[EnrichmentRequest | dict[str, Any]],
         api_user: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> EnrichTransactionCollectionResponse:
         """Submits an asynchronous batch collection of transactions for high-throughput enrichment."""
         validated_requests = validate_batch_enrichment_requests(requests)
         token = await self.config.resolve_token_async()
-        headers = build_request_headers(self.config, token=token, api_user=api_user)
+        headers = build_request_headers(
+            self.config, token=token, api_user=api_user, correlation_id=correlation_id, traceparent=traceparent
+        )
 
         url = f"{self.config.base_url}/v1/ai/finance/enrichment/transactions"
         response = await self._send_request("POST", url, headers=headers, json=validated_requests)
@@ -103,11 +110,20 @@ class AsyncClient:
         self,
         id: str,
         api_user: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> EnrichmentCollectionStatusResponse:
         """Queries the lifecycle status of an asynchronous bulk enrichment batch job."""
         quoted_id = validate_status_job_id(id)
         token = await self.config.resolve_token_async()
-        headers = build_request_headers(self.config, token=token, api_user=api_user, content_type=None)
+        headers = build_request_headers(
+            self.config,
+            token=token,
+            api_user=api_user,
+            content_type=None,
+            correlation_id=correlation_id,
+            traceparent=traceparent,
+        )
 
         url = f"{self.config.base_url}/v1/ai/finance/enrichment/transaction/collection/status?id={quoted_id}"
         response = await self._send_request("GET", url, headers=headers)
@@ -115,11 +131,23 @@ class AsyncClient:
 
         return EnrichmentCollectionStatusResponse.from_dict(response.json())
 
-    async def download_enrichment_collection(self, download_url: str) -> list[EnrichmentResponse]:
+    async def download_enrichment_collection(
+        self,
+        download_url: str,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
+    ) -> list[EnrichmentResponse]:
         """Downloads and decompresses the results .tar.gz archive in memory with zero disk writes."""
         validated_url = self._security_policy.validate_download_url(download_url)
         token = await self.config.resolve_token_async()
-        headers = build_download_headers(self.config, self._security_policy, validated_url, token)
+        headers = build_download_headers(
+            self.config,
+            self._security_policy,
+            validated_url,
+            token,
+            correlation_id=correlation_id,
+            traceparent=traceparent,
+        )
 
         response = await self._send_request("GET", validated_url, headers=headers)
         self._ensure_success(response)
@@ -132,11 +160,23 @@ class AsyncClient:
             max_tar_entries=self.config.max_tar_entries,
         )
 
-    async def stream_enrichment_collection(self, download_url: str) -> AsyncIterator[EnrichmentResponse]:
+    async def stream_enrichment_collection(
+        self,
+        download_url: str,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
+    ) -> AsyncIterator[EnrichmentResponse]:
         """Asynchronously streams and yields enrichment records on-the-fly from the bulk results archive."""
         validated_url = self._security_policy.validate_download_url(download_url)
         token = await self.config.resolve_token_async()
-        headers = build_download_headers(self.config, self._security_policy, validated_url, token)
+        headers = build_download_headers(
+            self.config,
+            self._security_policy,
+            validated_url,
+            token,
+            correlation_id=correlation_id,
+            traceparent=traceparent,
+        )
 
         try:
             async with self._client.stream("GET", validated_url, headers=headers) as response:
@@ -162,21 +202,7 @@ class AsyncClient:
             ) from ex
 
     def _ensure_success(self, response: httpx.Response) -> None:
-        if response.is_success:
-            return
-
-        status = response.status_code
-        text = response.text
-
-        if status >= 500:
-            raise XyoServerException(status, text or f"[HTTP {status}] Server error", raw_body=text)
-
-        if status >= 400:
-            if text and (text.strip().startswith("{") or text.strip().startswith("[")):
-                raise XyoProblemDetailsException.from_json(status, text)
-            raise XyoClientException(status, text or f"[HTTP {status}] Client error", raw_body=text)
-
-        raise XyoClientException(status, f"[HTTP {status}] Unexpected HTTP response", raw_body=text)
+        handle_http_error(response)
 
     async def close(self) -> None:
         """Closes the underlying HTTP client if owned."""

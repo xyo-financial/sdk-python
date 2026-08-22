@@ -2,8 +2,43 @@
 
 from __future__ import annotations
 
+import email.utils
 import json
-from typing import Any
+import warnings
+from datetime import datetime, timezone
+from typing import Any, TypedDict
+
+# Headers safe to surface in exception objects — excludes credentials and PII.
+_SAFE_HEADERS: frozenset[str] = frozenset(
+    {
+        "content-type",
+        "retry-after",
+        "ratelimit-limit",
+        "ratelimit-remaining",
+        "ratelimit-reset",
+        "x-ratelimit-limit",
+        "x-ratelimit-remaining",
+        "x-ratelimit-reset",
+        "x-correlation-id",
+        "x-request-id",
+        "x-trace-id",
+        "traceparent",
+        "tracestate",
+        "date",
+        "server",
+        "content-length",
+        "cache-control",
+    }
+)
+
+
+class RateLimitInfo(TypedDict):
+    """Structured representation of rate limit HTTP response headers."""
+
+    retry_after: float | int | None
+    rate_limit_limit: int | None
+    rate_limit_remaining: int | None
+    rate_limit_reset: float | int | None
 
 
 class XyoException(Exception):
@@ -22,10 +57,20 @@ class XyoClientException(XyoException):
         status_code: int,
         message: str,
         raw_body: str | None = None,
+        retry_after: float | int | None = None,
+        rate_limit_limit: int | None = None,
+        rate_limit_remaining: int | None = None,
+        rate_limit_reset: float | int | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.raw_body = raw_body
+        self.retry_after = retry_after
+        self.rate_limit_limit = rate_limit_limit
+        self.rate_limit_remaining = rate_limit_remaining
+        self.rate_limit_reset = rate_limit_reset
+        self.headers = {k.lower(): v for k, v in headers.items() if k.lower() in _SAFE_HEADERS} if headers else {}
 
     def is_auth(self) -> bool:
         """Returns True if the error is 401 Unauthorized or 403 Forbidden."""
@@ -36,8 +81,43 @@ class XyoClientException(XyoException):
         return self.status_code == 404
 
     def is_rate_limited(self) -> bool:
-        """Returns True if the request was rate-limited (429 Too Many Requests)."""
+        """Returns True if the request was rate-limited (429 Too Many Requests).
+
+        .. deprecated::
+            Use ``isinstance(exc, RateLimitExceededError)`` instead for precise type-narrowing.
+        """
+        warnings.warn(
+            "is_rate_limited() is deprecated — use isinstance(exc, RateLimitExceededError) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.status_code == 429
+
+
+class RateLimitExceededError(XyoClientException):
+    """Exception raised when the API returns an HTTP 429 Rate Limit error."""
+
+    def __init__(
+        self,
+        status_code: int = 429,
+        message: str = "Rate limit exceeded",
+        raw_body: str | None = None,
+        retry_after: float | int | None = None,
+        rate_limit_limit: int | None = None,
+        rate_limit_remaining: int | None = None,
+        rate_limit_reset: float | int | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        super().__init__(
+            status_code=status_code,
+            message=message,
+            raw_body=raw_body,
+            retry_after=retry_after,
+            rate_limit_limit=rate_limit_limit,
+            rate_limit_remaining=rate_limit_remaining,
+            rate_limit_reset=rate_limit_reset,
+            headers=headers,
+        )
 
 
 class XyoProblemDetailsException(XyoClientException):
@@ -54,8 +134,22 @@ class XyoProblemDetailsException(XyoClientException):
         instance: str | None = None,
         errors: dict[str, list[str]] | None = None,
         raw_body: str | None = None,
+        retry_after: float | int | None = None,
+        rate_limit_limit: int | None = None,
+        rate_limit_remaining: int | None = None,
+        rate_limit_reset: float | int | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
-        super().__init__(status_code, message, raw_body=raw_body)
+        super().__init__(
+            status_code,
+            message,
+            raw_body=raw_body,
+            retry_after=retry_after,
+            rate_limit_limit=rate_limit_limit,
+            rate_limit_remaining=rate_limit_remaining,
+            rate_limit_reset=rate_limit_reset,
+            headers=headers,
+        )
         self.type = type
         self.title = title
         self.status = status or status_code
@@ -64,8 +158,11 @@ class XyoProblemDetailsException(XyoClientException):
         self.errors = errors or {}
 
     @classmethod
-    def from_json(cls, status_code: int, payload: str) -> XyoProblemDetailsException:
+    def from_json(
+        cls, status_code: int, payload: str, headers: dict[str, str] | None = None
+    ) -> XyoProblemDetailsException:
         """Attempts to parse an RFC 7807 problem details JSON string into a structured exception."""
+        rl_info = parse_rate_limit_headers(headers)
         try:
             data = json.loads(payload)
             if isinstance(data, dict):
@@ -95,8 +192,13 @@ class XyoProblemDetailsException(XyoClientException):
                     instance=p_instance,
                     errors=errors,
                     raw_body=payload,
+                    retry_after=rl_info["retry_after"],
+                    rate_limit_limit=rl_info["rate_limit_limit"],
+                    rate_limit_remaining=rl_info["rate_limit_remaining"],
+                    rate_limit_reset=rl_info["rate_limit_reset"],
+                    headers=headers,
                 )
-        except Exception:
+        except json.JSONDecodeError:
             pass
 
         sanitized = payload[:512] + "..." if len(payload) > 512 else payload
@@ -105,6 +207,11 @@ class XyoProblemDetailsException(XyoClientException):
             message=f"[HTTP {status_code}] {sanitized}",
             status=status_code,
             raw_body=payload,
+            retry_after=rl_info["retry_after"],
+            rate_limit_limit=rl_info["rate_limit_limit"],
+            rate_limit_remaining=rl_info["rate_limit_remaining"],
+            rate_limit_reset=rl_info["rate_limit_reset"],
+            headers=headers,
         )
 
 
@@ -116,10 +223,14 @@ class XyoServerException(XyoException):
         status_code: int,
         message: str,
         raw_body: str | None = None,
+        retry_after: float | int | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.raw_body = raw_body
+        self.retry_after = retry_after
+        self.headers = {k.lower(): v for k, v in headers.items() if k.lower() in _SAFE_HEADERS} if headers else {}
 
     def is_retryable(self) -> bool:
         """Returns True if the server error is transient and safe to retry."""
@@ -135,6 +246,68 @@ class XyoNetworkException(XyoException):
         self.is_retryable = True
 
 
+def parse_rate_limit_headers(headers: Any) -> RateLimitInfo:
+    """Parses RateLimit and Retry-After HTTP headers into typed numeric values."""
+    if not headers:
+        return {
+            "retry_after": None,
+            "rate_limit_limit": None,
+            "rate_limit_remaining": None,
+            "rate_limit_reset": None,
+        }
+
+    def get_val(*keys: str) -> str | None:
+        if hasattr(headers, "get"):
+            for key in keys:
+                val = headers.get(key)
+                if val is not None:
+                    return str(val)
+                val = headers.get(key.lower())
+                if val is not None:
+                    return str(val)
+        return None
+
+    def parse_num(val: str | None) -> float | int | None:
+        if val is not None:
+            try:
+                f = float(val)
+                return int(f) if f.is_integer() else f
+            except (ValueError, TypeError):
+                try:
+                    dt = email.utils.parsedate_to_datetime(val)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    now = datetime.now(timezone.utc)
+                    diff = max(0.0, (dt - now).total_seconds())
+                    return int(diff) if diff.is_integer() else diff
+                except (ValueError, TypeError, AttributeError, IndexError):
+                    pass
+        return None
+
+    def parse_int(val: str | None) -> int | None:
+        if val is not None:
+            try:
+                return int(float(val))
+            except (ValueError, TypeError):
+                pass
+        return None
+
+    retry_after_str = get_val("Retry-After", "retry-after")
+    limit_str = get_val("RateLimit-Limit", "ratelimit-limit", "X-RateLimit-Limit", "x-ratelimit-limit")
+    remaining_str = get_val(
+        "RateLimit-Remaining", "ratelimit-remaining", "X-RateLimit-Remaining", "x-ratelimit-remaining"
+    )
+    reset_str = get_val("RateLimit-Reset", "ratelimit-reset", "X-RateLimit-Reset", "x-ratelimit-reset")
+
+    return {
+        "retry_after": parse_num(retry_after_str),
+        "rate_limit_limit": parse_int(limit_str),
+        "rate_limit_remaining": parse_int(remaining_str),
+        "rate_limit_reset": parse_num(reset_str),
+    }
+
+
 # Aliases for Acceptance Criteria and OpenAPI parity
+XyoError = XyoException
 ErrorResponse = XyoProblemDetailsException
 APIError = XyoClientException

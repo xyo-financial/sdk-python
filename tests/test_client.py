@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 import pytest
 import respx
@@ -9,7 +11,7 @@ import respx
 from xyo import Client, ClientConfig, EnrichmentRequest, XyoClientException, XyoServerException
 
 
-def test_enrich_transaction_valid_request(mock_enrichment_response_json: dict) -> None:
+def test_enrich_transaction_valid_request(mock_enrichment_response_json: dict[str, Any]) -> None:
     with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
         route = respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
             return_value=httpx.Response(200, json=mock_enrichment_response_json)
@@ -32,7 +34,7 @@ def test_enrich_transaction_valid_request(mock_enrichment_response_json: dict) -
             assert req.headers["Authorization"] == "Bearer xyo_test_key_123"
 
 
-def test_enrich_transaction_structured_model(mock_enrichment_response_json: dict) -> None:
+def test_enrich_transaction_structured_model(mock_enrichment_response_json: dict[str, Any]) -> None:
     with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
         respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
             return_value=httpx.Response(200, json=mock_enrichment_response_json)
@@ -43,6 +45,47 @@ def test_enrich_transaction_structured_model(mock_enrichment_response_json: dict
             assert req.country_code == "GB"
             resp = client.enrich_transaction(req)
             assert resp.merchant == "Costa Coffee"
+
+
+def test_enrich_transaction_tracing_headers(mock_enrichment_response_json: dict[str, Any]) -> None:
+    with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
+        route = respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
+            return_value=httpx.Response(200, json=mock_enrichment_response_json)
+        )
+
+        with Client(api_key="key") as client:
+            client.enrich_transaction(
+                content="COSTA",
+                country_code="GB",
+                correlation_id="corr-m-1",
+                traceparent="00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            )
+
+            assert route.called
+            req = route.calls.last.request
+            assert req.headers["X-Correlation-ID"] == "corr-m-1"
+            assert req.headers["traceparent"] == "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+
+
+def test_enrich_transaction_tracing_uuid_headers(mock_enrichment_response_json: dict[str, Any]) -> None:
+    import uuid
+
+    corr_uuid = uuid.uuid4()
+    with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
+        route = respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
+            return_value=httpx.Response(200, json=mock_enrichment_response_json)
+        )
+
+        with Client(api_key="key") as client:
+            client.enrich_transaction(
+                content="COSTA",
+                country_code="GB",
+                correlation_id=corr_uuid,
+            )
+
+            assert route.called
+            req = route.calls.last.request
+            assert req.headers["X-Correlation-ID"] == str(corr_uuid)
 
 
 def test_enrich_transaction_validation_errors() -> None:
@@ -63,7 +106,7 @@ def test_enrich_transaction_validation_errors() -> None:
         assert exc_info.value.status_code == 400
 
 
-def test_enrich_transactions_batch_submission(mock_batch_response_json: dict) -> None:
+def test_enrich_transactions_batch_submission(mock_batch_response_json: dict[str, Any]) -> None:
     with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
         route = respx_mock.post("/v1/ai/finance/enrichment/transactions").mock(
             return_value=httpx.Response(200, json=mock_batch_response_json)
@@ -71,7 +114,7 @@ def test_enrich_transactions_batch_submission(mock_batch_response_json: dict) ->
 
         config = ClientConfig(api_key="xyo_test_key_123", correlation_id="trace_001")
         with Client(config=config) as client:
-            batch = [
+            batch: list[EnrichmentRequest | dict[str, Any]] = [
                 EnrichmentRequest("COSTA", "GB"),
                 {"content": "STARBUCKS", "countryCode": "US"},
             ]
@@ -93,13 +136,13 @@ def test_enrich_transactions_empty_batch_rejected() -> None:
         assert exc_info.value.status_code == 400
 
         with pytest.raises(XyoClientException):
-            client.enrich_transactions([None])  # type: ignore[list-item]
+            client.enrich_transactions([None])  # type: ignore
 
         with pytest.raises(XyoClientException):
-            client.enrich_transactions([123])  # type: ignore[list-item]
+            client.enrich_transactions([123])  # type: ignore
 
 
-def test_get_enrichment_status(mock_status_response_json: dict) -> None:
+def test_get_enrichment_status(mock_status_response_json: dict[str, Any]) -> None:
     with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
         route = respx_mock.get("/v1/ai/finance/enrichment/transaction/collection/status").mock(
             return_value=httpx.Response(200, json=mock_status_response_json)

@@ -2,24 +2,23 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import Any
+from uuid import UUID
 
 import httpx
 
 from xyo._builders import (
     build_download_headers,
     build_request_headers,
+    handle_http_error,
     validate_batch_enrichment_requests,
     validate_single_enrichment_request,
     validate_status_job_id,
 )
 from xyo.config import ClientConfig
 from xyo.exceptions import (
-    XyoClientException,
     XyoNetworkException,
-    XyoProblemDetailsException,
-    XyoServerException,
 )
 from xyo.models import (
     EnrichmentCollectionStatusResponse,
@@ -70,19 +69,25 @@ class Client:
         self,
         content: str | EnrichmentRequest,
         country_code: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> EnrichmentResponse:
         """Synchronously enriches a single bank transaction narrative.
 
         Args:
             content: Raw transaction text or structured EnrichmentRequest instance.
             country_code: ISO 3166-1 alpha-2 two-character country code (e.g. 'GB', 'US').
+            correlation_id: Distributed tracing correlation header value (X-Correlation-ID).
+            traceparent: Standard W3C TraceContext header value.
 
         Returns:
             EnrichmentResponse with merchant, categories, logo, and address.
         """
         req_dict = validate_single_enrichment_request(content, country_code)
         token = self.config.resolve_token()
-        headers = build_request_headers(self.config, token=token)
+        headers = build_request_headers(
+            self.config, token=token, correlation_id=correlation_id, traceparent=traceparent
+        )
 
         url = f"{self.config.base_url}/v1/ai/finance/enrichment/transaction"
         response = self._send_request("POST", url, headers=headers, json=req_dict)
@@ -92,21 +97,27 @@ class Client:
 
     def enrich_transactions(
         self,
-        requests: list[EnrichmentRequest | dict[str, Any]],
+        requests: Sequence[EnrichmentRequest | dict[str, Any]],
         api_user: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> EnrichTransactionCollectionResponse:
         """Submits an asynchronous batch collection of transactions for high-throughput enrichment.
 
         Args:
             requests: List of EnrichmentRequest objects or dictionaries.
             api_user: Optional tenant identifier (x-api-user).
+            correlation_id: Distributed tracing correlation header value (X-Correlation-ID).
+            traceparent: Standard W3C TraceContext header value.
 
         Returns:
             EnrichTransactionCollectionResponse with batch job ID and download link.
         """
         validated_requests = validate_batch_enrichment_requests(requests)
         token = self.config.resolve_token()
-        headers = build_request_headers(self.config, token=token, api_user=api_user)
+        headers = build_request_headers(
+            self.config, token=token, api_user=api_user, correlation_id=correlation_id, traceparent=traceparent
+        )
 
         url = f"{self.config.base_url}/v1/ai/finance/enrichment/transactions"
         response = self._send_request("POST", url, headers=headers, json=validated_requests)
@@ -118,11 +129,20 @@ class Client:
         self,
         id: str,
         api_user: str | None = None,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
     ) -> EnrichmentCollectionStatusResponse:
         """Queries the lifecycle status of an asynchronous bulk enrichment batch job."""
         quoted_id = validate_status_job_id(id)
         token = self.config.resolve_token()
-        headers = build_request_headers(self.config, token=token, api_user=api_user, content_type=None)
+        headers = build_request_headers(
+            self.config,
+            token=token,
+            api_user=api_user,
+            content_type=None,
+            correlation_id=correlation_id,
+            traceparent=traceparent,
+        )
 
         url = f"{self.config.base_url}/v1/ai/finance/enrichment/transaction/collection/status?id={quoted_id}"
         response = self._send_request("GET", url, headers=headers)
@@ -130,11 +150,23 @@ class Client:
 
         return EnrichmentCollectionStatusResponse.from_dict(response.json())
 
-    def download_enrichment_collection(self, download_url: str) -> list[EnrichmentResponse]:
+    def download_enrichment_collection(
+        self,
+        download_url: str,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
+    ) -> list[EnrichmentResponse]:
         """Downloads and decompresses the results .tar.gz archive in memory with zero disk writes."""
         validated_url = self._security_policy.validate_download_url(download_url)
         token = self.config.resolve_token()
-        headers = build_download_headers(self.config, self._security_policy, validated_url, token)
+        headers = build_download_headers(
+            self.config,
+            self._security_policy,
+            validated_url,
+            token,
+            correlation_id=correlation_id,
+            traceparent=traceparent,
+        )
 
         response = self._send_request("GET", validated_url, headers=headers)
         self._ensure_success(response)
@@ -146,11 +178,23 @@ class Client:
             max_tar_entries=self.config.max_tar_entries,
         )
 
-    def stream_enrichment_collection(self, download_url: str) -> Iterator[EnrichmentResponse]:
+    def stream_enrichment_collection(
+        self,
+        download_url: str,
+        correlation_id: str | UUID | None = None,
+        traceparent: str | UUID | None = None,
+    ) -> Iterator[EnrichmentResponse]:
         """Streams and yields enrichment records on-the-fly from the bulk results archive."""
         validated_url = self._security_policy.validate_download_url(download_url)
         token = self.config.resolve_token()
-        headers = build_download_headers(self.config, self._security_policy, validated_url, token)
+        headers = build_download_headers(
+            self.config,
+            self._security_policy,
+            validated_url,
+            token,
+            correlation_id=correlation_id,
+            traceparent=traceparent,
+        )
 
         try:
             with self._client.stream("GET", validated_url, headers=headers) as response:
@@ -175,21 +219,7 @@ class Client:
             ) from ex
 
     def _ensure_success(self, response: httpx.Response) -> None:
-        if response.is_success:
-            return
-
-        status = response.status_code
-        text = response.text
-
-        if status >= 500:
-            raise XyoServerException(status, text or f"[HTTP {status}] Server error", raw_body=text)
-
-        if status >= 400:
-            if text and (text.strip().startswith("{") or text.strip().startswith("[")):
-                raise XyoProblemDetailsException.from_json(status, text)
-            raise XyoClientException(status, text or f"[HTTP {status}] Client error", raw_body=text)
-
-        raise XyoClientException(status, f"[HTTP {status}] Unexpected HTTP response", raw_body=text)
+        handle_http_error(response)
 
     def close(self) -> None:
         """Closes the underlying HTTP client if owned."""

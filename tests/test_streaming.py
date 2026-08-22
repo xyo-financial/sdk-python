@@ -7,6 +7,7 @@ import io
 import json
 import tarfile
 from collections.abc import AsyncIterator, Iterator
+from typing import Any
 from unittest.mock import patch
 
 import httpx
@@ -22,7 +23,7 @@ from xyo.streaming import (
 )
 
 
-def create_mock_tar_gz(entries: list[tuple[str, dict | str | bytes]]) -> bytes:
+def create_mock_tar_gz(entries: list[tuple[str, dict[str, Any] | str | bytes]]) -> bytes:
     """Helper to build an in-memory .tar.gz archive."""
     bio = io.BytesIO()
     with tarfile.open(fileobj=bio, mode="w:gz") as tar:
