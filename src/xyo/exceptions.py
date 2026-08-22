@@ -68,9 +68,7 @@ class XyoClientException(XyoException):
         self.rate_limit_limit = rate_limit_limit
         self.rate_limit_remaining = rate_limit_remaining
         self.rate_limit_reset = rate_limit_reset
-        self.headers = (
-            {k.lower(): v for k, v in headers.items() if k.lower() in _SAFE_HEADERS} if headers else {}
-        )
+        self.headers = {k.lower(): v for k, v in headers.items() if k.lower() in _SAFE_HEADERS} if headers else {}
 
     def is_auth(self) -> bool:
         """Returns True if the error is 401 Unauthorized or 403 Forbidden."""
