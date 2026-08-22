@@ -10,6 +10,7 @@ from xyo import (
     APIError,
     Client,
     ErrorResponse,
+    RateLimitExceededError,
     XyoClientException,
     XyoException,
     XyoNetworkException,
@@ -87,17 +88,35 @@ def test_http_404_not_found_exception() -> None:
 
 
 def test_http_429_rate_limited_exception() -> None:
+    headers = {
+        "Retry-After": "60",
+        "RateLimit-Limit": "1000",
+        "RateLimit-Remaining": "0",
+        "RateLimit-Reset": "120",
+    }
     with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
         respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
-            return_value=httpx.Response(429, json={"title": "Too Many Requests", "detail": "Rate limit exceeded."})
+            return_value=httpx.Response(
+                429,
+                json={"title": "Too Many Requests", "detail": "Rate limit exceeded."},
+                headers=headers,
+            )
         )
 
         with Client(api_key="token") as client:
             with pytest.raises(XyoClientException) as exc_info:
                 client.enrich_transaction("COSTA", "GB")
 
-            assert exc_info.value.status_code == 429
-            assert exc_info.value.is_rate_limited()
+            ex = exc_info.value
+            assert isinstance(ex, RateLimitExceededError)
+            assert ex.status_code == 429
+            assert ex.is_rate_limited()
+            assert ex.retry_after == 60
+            assert ex.rate_limit_limit == 1000
+            assert ex.rate_limit_remaining == 0
+            assert ex.rate_limit_reset == 120
+            assert ex.headers.get("retry-after") == "60" or ex.headers.get("Retry-After") == "60"
+
 
 
 def test_http_500_server_exception_is_retryable() -> None:

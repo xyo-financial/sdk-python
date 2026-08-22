@@ -6,6 +6,7 @@ import asyncio
 import io
 import json
 import tarfile
+from typing import Any
 from unittest.mock import patch
 
 import httpx
@@ -16,13 +17,14 @@ from xyo import (
     AsyncClient,
     ClientConfig,
     EnrichmentRequest,
+    EnrichmentResponse,
     XyoClientException,
     XyoServerException,
 )
 from xyo.streaming import decompress_tar_gz_in_memory
 
 
-def create_tar_gz_bytes(entries: list[tuple[str, dict | str]]) -> bytes:
+def create_tar_gz_bytes(entries: list[tuple[str, dict[str, Any] | str]]) -> bytes:
     bio = io.BytesIO()
     with tarfile.open(fileobj=bio, mode="w:gz") as tar:
         for name, data in entries:
@@ -34,7 +36,7 @@ def create_tar_gz_bytes(entries: list[tuple[str, dict | str]]) -> bytes:
 
 
 @pytest.mark.asyncio
-async def test_async_enrich_transaction(mock_enrichment_response_json: dict) -> None:
+async def test_async_enrich_transaction(mock_enrichment_response_json: dict[str, Any]) -> None:
     with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
         route = respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
             return_value=httpx.Response(200, json=mock_enrichment_response_json)
@@ -52,7 +54,27 @@ async def test_async_enrich_transaction(mock_enrichment_response_json: dict) -> 
 
 
 @pytest.mark.asyncio
-async def test_async_enrich_transaction_model_input(mock_enrichment_response_json: dict) -> None:
+async def test_async_enrich_transaction_tracing_headers(mock_enrichment_response_json: dict[str, Any]) -> None:
+    with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
+        route = respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
+            return_value=httpx.Response(200, json=mock_enrichment_response_json)
+        )
+
+        async with AsyncClient(api_key="xyo_async_test_key") as client:
+            await client.enrich_transaction(
+                content="COSTA",
+                country_code="GB",
+                correlation_id="async-corr-1",
+                traceparent="00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            )
+            assert route.called
+            req = route.calls.last.request
+            assert req.headers["X-Correlation-ID"] == "async-corr-1"
+            assert req.headers["traceparent"] == "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+
+
+@pytest.mark.asyncio
+async def test_async_enrich_transaction_model_input(mock_enrichment_response_json: dict[str, Any]) -> None:
     with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
         respx_mock.post("/v1/ai/finance/enrichment/transaction").mock(
             return_value=httpx.Response(200, json=mock_enrichment_response_json)
@@ -65,14 +87,14 @@ async def test_async_enrich_transaction_model_input(mock_enrichment_response_jso
 
 
 @pytest.mark.asyncio
-async def test_async_enrich_transactions_batch(mock_batch_response_json: dict) -> None:
+async def test_async_enrich_transactions_batch(mock_batch_response_json: dict[str, Any]) -> None:
     with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
         route = respx_mock.post("/v1/ai/finance/enrichment/transactions").mock(
             return_value=httpx.Response(200, json=mock_batch_response_json)
         )
 
         async with AsyncClient(api_key="xyo_async_test_key") as client:
-            batch = [
+            batch: list[EnrichmentRequest | dict[str, Any]] = [
                 EnrichmentRequest("COSTA", "GB"),
                 {"content": "STARBUCKS", "countryCode": "US"},
             ]
@@ -84,7 +106,7 @@ async def test_async_enrich_transactions_batch(mock_batch_response_json: dict) -
 
 
 @pytest.mark.asyncio
-async def test_async_get_enrichment_status(mock_status_response_json: dict) -> None:
+async def test_async_get_enrichment_status(mock_status_response_json: dict[str, Any]) -> None:
     with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
         route = respx_mock.get("/v1/ai/finance/enrichment/transaction/collection/status").mock(
             return_value=httpx.Response(200, json=mock_status_response_json)
@@ -113,7 +135,7 @@ async def test_async_stream_and_download_collection() -> None:
             assert len(records) == 1
             assert records[0].merchant == "Costa Coffee"
 
-            streamed: list = []
+            streamed: list[EnrichmentResponse] = []
             async for item in client.stream_enrichment_collection(
                 "https://download.xyo.financial/batches/12345.tar.gz"
             ):
@@ -132,10 +154,10 @@ async def test_async_validation_errors() -> None:
             await client.enrich_transactions([])
 
         with pytest.raises(XyoClientException):
-            await client.enrich_transactions([None])  # type: ignore[list-item]
+            await client.enrich_transactions([None])  # type: ignore
 
         with pytest.raises(XyoClientException):
-            await client.enrich_transactions([123])  # type: ignore[list-item]
+            await client.enrich_transactions([123])  # type: ignore
 
         with pytest.raises(XyoClientException):
             await client.get_enrichment_status("")
@@ -227,3 +249,4 @@ async def test_async_download_enrichment_collection_non_blocking_event_loop() ->
         await bg_task
         assert len(records) == 1
         assert ticks == 5
+

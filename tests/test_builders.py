@@ -1,6 +1,6 @@
-"""Unit tests for consolidated request builders and validation helpers."""
-
 from __future__ import annotations
+
+from typing import Any
 
 import pytest
 
@@ -43,10 +43,10 @@ def test_validate_batch_enrichment_requests() -> None:
     assert exc_null.value.status_code == 400
 
     with pytest.raises(XyoClientException) as exc_type:
-        validate_batch_enrichment_requests([12345])  # type: ignore[list-item]
+        validate_batch_enrichment_requests([12345])  # type: ignore
     assert exc_type.value.status_code == 400
 
-    batch = [
+    batch: list[EnrichmentRequest | dict[str, Any]] = [
         EnrichmentRequest("Costa", "GB"),
         {"content": "Starbucks", "countryCode": "US"},
     ]
@@ -54,6 +54,15 @@ def test_validate_batch_enrichment_requests() -> None:
     assert len(res) == 2
     assert res[0]["content"] == "Costa"
     assert res[1]["content"] == "Starbucks"
+
+
+def test_validate_batch_enrichment_requests_size_limits() -> None:
+    # 50,001 items exceeds upper bound
+    oversized = [{"content": f"Tx{i}", "countryCode": "US"} for i in range(50001)]
+    with pytest.raises(XyoClientException) as exc_limit:
+        validate_batch_enrichment_requests(oversized)
+    assert exc_limit.value.status_code == 400
+    assert "exceeds maximum allowed limit of 50000" in exc_limit.value.message
 
 
 def test_validate_status_job_id() -> None:
@@ -72,6 +81,7 @@ def test_validate_status_job_id() -> None:
 def test_build_request_headers() -> None:
     cfg = ClientConfig(
         correlation_id="corr-789",
+        traceparent="00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
         default_headers={"X-Custom": "val", "Accept": "ignored"},
     )
     headers = build_request_headers(cfg, token="test-token", api_user="tenant-user")
@@ -80,18 +90,42 @@ def test_build_request_headers() -> None:
     assert headers["Content-Type"] == "application/json"
     assert headers["x-api-user"] == "tenant-user"
     assert headers["X-Correlation-ID"] == "corr-789"
+    assert headers["traceparent"] == "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
     assert headers["X-Custom"] == "val"
 
 
+def test_build_request_headers_override_tracing() -> None:
+    cfg = ClientConfig(correlation_id="cfg-corr", traceparent="cfg-trace")
+    headers = build_request_headers(
+        cfg,
+        token="test-token",
+        correlation_id="method-corr",
+        traceparent="method-trace",
+    )
+    assert headers["X-Correlation-ID"] == "method-corr"
+    assert headers["traceparent"] == "method-trace"
+
+
 def test_build_download_headers() -> None:
-    cfg = ClientConfig(correlation_id="corr-123")
+    cfg = ClientConfig(correlation_id="corr-123", traceparent="trace-123")
     policy = DownloadSecurityPolicy("https://api.xyo.financial")
 
     # API host should include Bearer token
     h1 = build_download_headers(cfg, policy, "https://api.xyo.financial/file.tar.gz", token="auth-token")
     assert h1["Authorization"] == "Bearer auth-token"
     assert h1["X-Correlation-ID"] == "corr-123"
+    assert h1["traceparent"] == "trace-123"
 
     # External storage host should NOT include Bearer token
-    h2 = build_download_headers(cfg, policy, "https://xyo-financial.s3.amazonaws.com/file.tar.gz", token="auth-token")
+    h2 = build_download_headers(
+        cfg,
+        policy,
+        "https://xyo-financial.s3.amazonaws.com/file.tar.gz",
+        token="auth-token",
+        correlation_id="method-corr",
+        traceparent="method-trace",
+    )
     assert "Authorization" not in h2
+    assert h2["X-Correlation-ID"] == "method-corr"
+    assert h2["traceparent"] == "method-trace"
+

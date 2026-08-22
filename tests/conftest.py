@@ -5,12 +5,13 @@ from __future__ import annotations
 import io
 import json
 import tarfile
+from typing import Any
 
 import pytest
 
 
 @pytest.fixture
-def mock_enrichment_response_json() -> dict:
+def mock_enrichment_response_json() -> dict[str, Any]:
     return {
         "merchant": "Costa Coffee",
         "description": "British coffeehouse chain.",
@@ -22,7 +23,7 @@ def mock_enrichment_response_json() -> dict:
 
 
 @pytest.fixture
-def mock_batch_response_json() -> dict:
+def mock_batch_response_json() -> dict[str, Any]:
     return {
         "id": "batch_job_12345",
         "link": "https://download.xyo.financial/batches/12345.tar.gz",
@@ -30,13 +31,13 @@ def mock_batch_response_json() -> dict:
 
 
 @pytest.fixture
-def mock_status_response_json() -> dict:
+def mock_status_response_json() -> dict[str, Any]:
     return {
         "status": "READY",
     }
 
 
-def create_mock_tar_gz(entries: list[tuple[str, dict | str]]) -> bytes:
+def create_mock_tar_gz(entries: list[tuple[str, dict[str, Any] | str]]) -> bytes:
     """Helper to build an in-memory .tar.gz archive."""
     bio = io.BytesIO()
     with tarfile.open(fileobj=bio, mode="w:gz") as tar:
@@ -46,3 +47,4 @@ def create_mock_tar_gz(entries: list[tuple[str, dict | str]]) -> bytes:
             ti.size = len(raw_bytes)
             tar.addfile(ti, io.BytesIO(raw_bytes))
     return bio.getvalue()
+

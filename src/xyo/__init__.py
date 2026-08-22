@@ -12,7 +12,9 @@ from xyo.config import ClientConfig
 from xyo.exceptions import (
     APIError,
     ErrorResponse,
+    RateLimitExceededError,
     XyoClientException,
+    XyoError,
     XyoException,
     XyoNetworkException,
     XyoProblemDetailsException,
@@ -42,7 +44,9 @@ __all__ = [
     "EnrichTransactionCollectionResponse",
     "EnrichmentCollectionStatusResponse",
     "XyoException",
+    "XyoError",
     "XyoClientException",
+    "RateLimitExceededError",
     "XyoServerException",
     "XyoNetworkException",
     "XyoProblemDetailsException",
@@ -50,3 +54,4 @@ __all__ = [
     "APIError",
     "exceptions",
 ]
+
