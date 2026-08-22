@@ -3,7 +3,31 @@
 from __future__ import annotations
 
 import json
+import warnings
 from typing import Any, TypedDict
+
+# Headers safe to surface in exception objects — excludes credentials and PII.
+_SAFE_HEADERS: frozenset[str] = frozenset(
+    {
+        "content-type",
+        "retry-after",
+        "ratelimit-limit",
+        "ratelimit-remaining",
+        "ratelimit-reset",
+        "x-ratelimit-limit",
+        "x-ratelimit-remaining",
+        "x-ratelimit-reset",
+        "x-correlation-id",
+        "x-request-id",
+        "x-trace-id",
+        "traceparent",
+        "tracestate",
+        "date",
+        "server",
+        "content-length",
+        "cache-control",
+    }
+)
 
 
 class RateLimitInfo(TypedDict):
@@ -44,7 +68,9 @@ class XyoClientException(XyoException):
         self.rate_limit_limit = rate_limit_limit
         self.rate_limit_remaining = rate_limit_remaining
         self.rate_limit_reset = rate_limit_reset
-        self.headers = {k.lower(): v for k, v in headers.items()} if headers else {}
+        self.headers = (
+            {k.lower(): v for k, v in headers.items() if k.lower() in _SAFE_HEADERS} if headers else {}
+        )
 
     def is_auth(self) -> bool:
         """Returns True if the error is 401 Unauthorized or 403 Forbidden."""
@@ -55,7 +81,16 @@ class XyoClientException(XyoException):
         return self.status_code == 404
 
     def is_rate_limited(self) -> bool:
-        """Returns True if the request was rate-limited (429 Too Many Requests)."""
+        """Returns True if the request was rate-limited (429 Too Many Requests).
+
+        .. deprecated::
+            Use ``isinstance(exc, RateLimitExceededError)`` instead for precise type-narrowing.
+        """
+        warnings.warn(
+            "is_rate_limited() is deprecated — use isinstance(exc, RateLimitExceededError) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.status_code == 429
 
 

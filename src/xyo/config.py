@@ -7,6 +7,7 @@ import re
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from typing import Any, Callable
+from uuid import UUID
 
 _CRLF_RE = re.compile(r"[\r\n]")
 DEFAULT_BASE_URL = "https://api.xyo.financial"
@@ -32,8 +33,8 @@ class ClientConfig:
     api_key: str | None = None
     token_supplier: Callable[[], str | Awaitable[str]] | None = None
     base_url: str = field(default_factory=lambda: os.getenv("XYO_API_BASE_URL", DEFAULT_BASE_URL).rstrip("/"))
-    correlation_id: str | Any | None = None
-    traceparent: str | Any | None = None
+    correlation_id: str | UUID | None = None
+    traceparent: str | UUID | None = None
     timeout: float = 30.0
     max_archive_bytes: int = 104_857_600  # 100 MiB
     max_entry_bytes: int = 10_485_760  # 10 MiB

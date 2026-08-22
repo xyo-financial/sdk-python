@@ -7,6 +7,7 @@ import re
 from collections.abc import Sequence
 from typing import Any
 from urllib.parse import quote, urlparse
+from uuid import UUID
 
 import httpx
 
@@ -81,8 +82,8 @@ def build_request_headers(
     api_user: str | None = None,
     content_type: str | None = "application/json",
     accept: str = "application/json",
-    correlation_id: str | Any | None = None,
-    traceparent: str | Any | None = None,
+    correlation_id: str | UUID | None = None,
+    traceparent: str | UUID | None = None,
 ) -> dict[str, str]:
     """Builds and sanitizes HTTP request headers with authentication and tracing."""
     validate_api_user(api_user)
@@ -106,8 +107,8 @@ def build_download_headers(
     security_policy: DownloadSecurityPolicy,
     validated_url: str,
     token: str | None = None,
-    correlation_id: str | Any | None = None,
-    traceparent: str | Any | None = None,
+    correlation_id: str | UUID | None = None,
+    traceparent: str | UUID | None = None,
 ) -> dict[str, str]:
     """Builds headers for archive download respecting Zero-Trust egress host policy."""
     parsed = urlparse(validated_url)
@@ -124,8 +125,8 @@ def build_download_headers(
 def _apply_config_headers(
     config: ClientConfig,
     headers: dict[str, str],
-    correlation_id: str | Any | None = None,
-    traceparent: str | Any | None = None,
+    correlation_id: str | UUID | None = None,
+    traceparent: str | UUID | None = None,
 ) -> None:
     """Applies correlation ID, traceparent, and default headers from ClientConfig or method parameters."""
     eff_corr = correlation_id if correlation_id is not None else config.correlation_id
