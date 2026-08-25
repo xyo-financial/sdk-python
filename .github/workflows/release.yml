@@ -127,3 +127,11 @@ jobs:
         run: |
           pip install .
           python examples/quickstart_sync.py
+
+      - name: Dispatch SDK version update
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.SDK_DISPATCH_TOKEN }}
+          repository: xyo-financial/xyo-financial
+          event-type: sdk-version-updated
+          client-payload: '{"sdk": "python", "version": "${{ github.ref_name }}"}'
