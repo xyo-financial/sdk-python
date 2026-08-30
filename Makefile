@@ -29,7 +29,7 @@ generate:
 	npx -y @openapitools/openapi-generator-cli generate \
 		-i ../specs/openapi.yml \
 		-g python \
-		-o ./src/xyo/_generated \
+		-o ./src \
 		--additional-properties=packageName=xyo._generated,library=httpx,generateSourceCodeOnly=true \
 		--global-property apiTests=false,modelTests=false,apiDocs=false,modelDocs=false
 

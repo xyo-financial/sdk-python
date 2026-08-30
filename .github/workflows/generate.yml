@@ -41,12 +41,28 @@ jobs:
 
       - name: Generate OpenAPI Python client
         run: |
+          # -o is the root the package tree is written under, not the package directory
+          # itself: packageName=xyo._generated makes the generator append xyo/_generated/
+          # to it. Pointing -o at src/xyo/_generated therefore produced a nested
+          # src/xyo/_generated/xyo/_generated/ that nothing imported, so regeneration
+          # silently never updated the real package and the layer went stale.
           npx -y @openapitools/openapi-generator-cli generate \
             -i specs/openapi.yml \
             -g python \
-            -o src/xyo/_generated \
+            -o src \
             --additional-properties=packageName=xyo._generated,library=httpx,generateSourceCodeOnly=true \
             --global-property apiTests=false,modelTests=false,apiDocs=false,modelDocs=false
+
+          # Fail loudly rather than open a plausible-looking pull request if the output
+          # ever lands somewhere unexpected again.
+          if [ ! -f src/xyo/_generated/api/enrichment_api.py ]; then
+            echo "::error::Generated client missing at src/xyo/_generated/api/enrichment_api.py"
+            exit 1
+          fi
+          if [ -e src/xyo/_generated/xyo ]; then
+            echo "::error::Generator nested its output at src/xyo/_generated/xyo; check -o against packageName"
+            exit 1
+          fi
 
           # Clean up specs checkout
           rm -rf specs
