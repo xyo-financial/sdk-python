@@ -109,3 +109,14 @@ warn_unused_configs = true
 exclude = [
     "^src/xyo/_generated/.*$",
 ]
+
+# `exclude` above only governs which files mypy discovers by walking the tree.
+# It does not stop mypy following an import into the generated package, and it
+# is matched on path, so it misses entirely when the package is installed and
+# resolved from site-packages rather than from src/. This override is keyed on
+# the module name instead, so generated code is held to no type-checking
+# standard however it happens to be resolved, while its types still inform the
+# wrapper that imports it.
+[[tool.mypy.overrides]]
+module = "xyo._generated.*"
+ignore_errors = true
