@@ -42,6 +42,13 @@ classifiers = [
 ]
 dependencies = [
     "httpx>=0.24.0",
+    # Required by the generated client in src/xyo/_generated. It is part of the
+    # shipped package, so its dependencies are runtime dependencies. Leaving them
+    # undeclared meant `import xyo._generated` raised ModuleNotFoundError on a
+    # clean install even though the module was published in the wheel.
+    "pydantic>=2.0.0",
+    "python-dateutil>=2.8.2",
+    "typing-extensions>=4.7.1",
 ]
 
 [project.optional-dependencies]
@@ -72,6 +79,7 @@ addopts = "-v --cov=xyo --cov-report=term-missing --cov-report=xml"
 [tool.coverage.run]
 source = ["src/xyo"]
 omit = [
+    "*/_generated/*",
     "*/tests/*",
 ]
 
@@ -85,6 +93,9 @@ exclude_lines = [
 [tool.ruff]
 line-length = 120
 target-version = "py39"
+extend-exclude = [
+    "src/xyo/_generated",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
@@ -95,3 +106,17 @@ python_version = "3.10"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+exclude = [
+    "^src/xyo/_generated/.*$",
+]
+
+# `exclude` above only governs which files mypy discovers by walking the tree.
+# It does not stop mypy following an import into the generated package, and it
+# is matched on path, so it misses entirely when the package is installed and
+# resolved from site-packages rather than from src/. This override is keyed on
+# the module name instead, so generated code is held to no type-checking
+# standard however it happens to be resolved, while its types still inform the
+# wrapper that imports it.
+[[tool.mypy.overrides]]
+module = "xyo._generated.*"
+ignore_errors = true

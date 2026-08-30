@@ -1,4 +1,12 @@
-"""Data models and request/response payloads for the XYO Python SDK."""
+"""Data models and request/response payloads for the XYO Python SDK.
+
+These are the ergonomic, dependency-free dataclasses the public API exposes.
+The wire contract itself lives in the generated layer under ``xyo._generated``,
+which is produced from the OpenAPI specification: every model here parses and
+serialises through its generated counterpart rather than reading raw dicts, so
+a specification change reaches this layer through the generator rather than by
+someone remembering to update a field list by hand.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +14,14 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from xyo._generated.models.enrich_transaction_collection_response import (
+    EnrichTransactionCollectionResponse as GeneratedCollectionResponse,
+)
+from xyo._generated.models.enrichment_collection_status_response import (
+    EnrichmentCollectionStatusResponse as GeneratedStatusResponse,
+)
+from xyo._generated.models.enrichment_request import EnrichmentRequest as GeneratedRequest
+from xyo._generated.models.enrichment_response import EnrichmentResponse as GeneratedResponse
 from xyo.exceptions import XyoClientException
 
 _COUNTRY_CODE_RE = re.compile(r"^[A-Za-z]{2}$")
@@ -42,12 +58,18 @@ class EnrichmentRequest:
             )
         self.country_code = trimmed.upper()
 
+    def to_generated(self) -> GeneratedRequest:
+        """Converts to the generated specification model."""
+        return GeneratedRequest(content=self.content, countryCode=self.country_code)
+
     def to_dict(self) -> dict[str, str]:
-        """Converts model to OpenAPI camelCase wire payload."""
-        return {
-            "content": self.content,
-            "countryCode": self.country_code,
-        }
+        """Converts to the OpenAPI wire payload.
+
+        Serialisation goes through the generated model so field names and casing
+        come from the specification rather than being restated here. A renamed
+        field therefore reaches the wire via regeneration, not by hand.
+        """
+        return self.to_generated().to_dict()
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> EnrichmentRequest:
@@ -96,19 +118,38 @@ class EnrichmentResponse:
         return self.location.strip()
 
     @classmethod
+    def from_generated(cls, model: GeneratedResponse) -> EnrichmentResponse:
+        """Adapts the generated specification model into the public dataclass."""
+        return cls(
+            merchant=model.merchant,
+            description=model.description,
+            categories=list(model.categories or []),
+            logo=model.logo or "",
+            location=model.location or "",
+            address=model.address or "",
+        )
+
+    @classmethod
     def from_dict(cls, data: dict[str, Any]) -> EnrichmentResponse:
-        """Instantiates EnrichmentResponse from dictionary."""
+        """Instantiates EnrichmentResponse from a raw API payload.
+
+        Parsing goes through the generated model so the specification stays the
+        single source of truth for field names and types. Payloads that predate
+        a field, or null out an optional one, are tolerated by filling defaults
+        before validation rather than by hand-reading keys here.
+        """
         cats = data.get("categories", [])
         if isinstance(cats, str):
             cats = [cats]
-        return cls(
-            merchant=data.get("merchant") or data.get("name", ""),
-            description=data.get("description", ""),
-            categories=cats,
-            logo=data.get("logo", ""),
-            location=data.get("location", ""),
-            address=data.get("address", ""),
-        )
+        normalised = {
+            "merchant": data.get("merchant") or data.get("name", "") or "",
+            "description": data.get("description") or "",
+            "categories": list(cats or []),
+            "logo": data.get("logo") or "",
+            "location": data.get("location") or "",
+            "address": data.get("address") or "",
+        }
+        return cls.from_generated(GeneratedResponse.model_validate(normalised))
 
 
 @dataclass
@@ -119,11 +160,15 @@ class EnrichTransactionCollectionResponse:
     link: str
 
     @classmethod
+    def from_generated(cls, model: GeneratedCollectionResponse) -> EnrichTransactionCollectionResponse:
+        """Adapts the generated specification model into the public dataclass."""
+        return cls(id=model.id, link=model.link)
+
+    @classmethod
     def from_dict(cls, data: dict[str, Any]) -> EnrichTransactionCollectionResponse:
-        return cls(
-            id=data.get("id", ""),
-            link=data.get("link", ""),
-        )
+        """Parses a raw API payload through the generated specification model."""
+        normalised = {"id": data.get("id") or "", "link": data.get("link") or ""}
+        return cls.from_generated(GeneratedCollectionResponse.model_validate(normalised))
 
 
 @dataclass
@@ -133,7 +178,12 @@ class EnrichmentCollectionStatusResponse:
     status: str
 
     @classmethod
+    def from_generated(cls, model: GeneratedStatusResponse) -> EnrichmentCollectionStatusResponse:
+        """Adapts the generated specification model into the public dataclass."""
+        return cls(status=model.status)
+
+    @classmethod
     def from_dict(cls, data: dict[str, Any]) -> EnrichmentCollectionStatusResponse:
-        return cls(
-            status=data.get("status", ""),
-        )
+        """Parses a raw API payload through the generated specification model."""
+        normalised = {"status": data.get("status") or ""}
+        return cls.from_generated(GeneratedStatusResponse.model_validate(normalised))

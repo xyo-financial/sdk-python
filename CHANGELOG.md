@@ -9,18 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
-- Deleted the unused `xyo._generated` package. Nothing outside it imported it, it was excluded from coverage, ruff and mypy, and it imported `pydantic`, `pydantic_core`, `dateutil` and `typing_extensions`, none of which are declared runtime dependencies. It was nevertheless published in the wheel, so `import xyo._generated` raised `ModuleNotFoundError` on a clean install. The public API is unchanged: nothing exported from `xyo` ever referenced it.
-
-### Added
-- `scripts/check_spec_coverage.py` and a `make spec-check` target, which fail when the specification declares a request path the hand-written client does not issue.
+### Fixed
+- Declared the generated client's runtime dependencies (`pydantic`, `python-dateutil`, `typing-extensions`). They were always required by `xyo._generated`, which ships in the wheel, but were never declared, so `import xyo._generated` raised `ModuleNotFoundError` on a clean install.
 
 ### Changed
-- Replaced the `generate.yml` regeneration workflow with `spec-check.yml`. It consumes the same `spec_tagged` dispatch, verifies path coverage, runs the test suite, and opens a `spec-drift` issue instead of raising a regeneration pull request.
-- Corrected `CONTRIBUTING.md`, which described `xyo._generated` as the transport layer; the transport is `httpx` and the client is hand-written throughout.
-- Spec synchronization now verifies rather than regenerates, superseding the unreleased regeneration pipeline previously listed here.
+- The wrapper now parses and serialises through the generated specification models rather than reading raw dictionaries. `models.py` gains `from_generated()` and `to_generated()`, so field names, casing and types come from the OpenAPI specification and reach the SDK through regeneration instead of hand edits. The public dataclasses, their fields and the wire payload are unchanged.
+- Documented the generated code policy in `CONTRIBUTING.md`: `src/xyo/_generated/` is committed exactly as the generator emits it, is never hand-edited or reformatted, is excluded from ruff, mypy and coverage, and is out of scope for review and audit.
 
-### Added (previously unreleased)
+### Added
+- Automated spec regeneration pipeline (`.github/workflows/generate.yml`) listening to `repository_dispatch` from `xyo-financial/specs`.
 - GitHub release workflow (`.github/workflows/release.yml`) with PyPI publishing, SBOM generation, SHA-256 checksums, and artifact provenance attestations.
 - Standalone `Python Runtime Support Schedule` SVG graphic in `docs/lts_schedule.svg` and proactive 3-month LTS sunset policy in `SECURITY.md`.
 

@@ -59,5 +59,8 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Spec checkout used by the spec-check workflow
+# OpenAPI generator
+node_modules/
+.openapi-generator/
+openapitools.json.bak
 specs/
