@@ -144,7 +144,7 @@ def test_enrich_transactions_empty_batch_rejected() -> None:
 
 def test_get_enrichment_status(mock_status_response_json: dict[str, Any]) -> None:
     with respx.mock(base_url="https://api.xyo.financial") as respx_mock:
-        route = respx_mock.get("/v1/ai/finance/enrichment/transaction/collection/status").mock(
+        route = respx_mock.get("/v1/ai/finance/enrichment/status/batch_job_12345").mock(
             return_value=httpx.Response(200, json=mock_status_response_json)
         )
 

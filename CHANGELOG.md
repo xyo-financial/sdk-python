@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Corrected the bulk enrichment status endpoint to `GET /v1/ai/finance/enrichment/status/{id}`, matching the specification. The client had been calling `/v1/ai/finance/enrichment/transaction/collection/status?id=`, passing the work identifier as a query parameter against a path that the API does not declare, so status polling could not have worked against the live service. The identifier is the `id` returned by `enrich_transactions`. Job identifiers are now escaped for a path segment, so one containing `/` can no longer inject extra segments.
 - Declared the generated client's runtime dependencies (`pydantic`, `python-dateutil`, `typing-extensions`). They were always required by `xyo._generated`, which ships in the wheel, but were never declared, so `import xyo._generated` raised `ModuleNotFoundError` on a clean install.
 
 ### Changed

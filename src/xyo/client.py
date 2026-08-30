@@ -132,7 +132,13 @@ class Client:
         correlation_id: str | UUID | None = None,
         traceparent: str | UUID | None = None,
     ) -> EnrichmentCollectionStatusResponse:
-        """Queries the lifecycle status of an asynchronous bulk enrichment batch job."""
+        """Queries the lifecycle status of an asynchronous bulk enrichment batch job.
+
+        Args:
+            id: The work identifier returned as ``id`` by :meth:`enrich_transactions`,
+                interpolated into the request path as
+                ``/v1/ai/finance/enrichment/status/{id}``.
+        """
         quoted_id = validate_status_job_id(id)
         token = self.config.resolve_token()
         headers = build_request_headers(
@@ -144,7 +150,7 @@ class Client:
             traceparent=traceparent,
         )
 
-        url = f"{self.config.base_url}/v1/ai/finance/enrichment/transaction/collection/status?id={quoted_id}"
+        url = f"{self.config.base_url}/v1/ai/finance/enrichment/status/{quoted_id}"
         response = self._send_request("GET", url, headers=headers)
         self._ensure_success(response)
 

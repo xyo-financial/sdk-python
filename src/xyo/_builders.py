@@ -70,10 +70,15 @@ def validate_batch_enrichment_requests(
 
 
 def validate_status_job_id(id: str) -> str:
-    """Validates and quotes enrichment batch job identifier."""
+    """Validates and quotes enrichment batch job identifier.
+
+    The identifier is interpolated into a path segment, so ``/`` must be escaped
+    rather than left safe as it is by default; otherwise an identifier
+    containing a slash would inject additional path segments into the request.
+    """
     if not id or not id.strip():
         raise XyoClientException(400, "Enrichment job identifier cannot be null, empty, or whitespace.")
-    return quote(id.strip())
+    return quote(id.strip(), safe="")
 
 
 def build_request_headers(
