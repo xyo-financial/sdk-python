@@ -42,6 +42,13 @@ classifiers = [
 ]
 dependencies = [
     "httpx>=0.24.0",
+    # Required by the generated client in src/xyo/_generated. It is part of the
+    # shipped package, so its dependencies are runtime dependencies. Leaving them
+    # undeclared meant `import xyo._generated` raised ModuleNotFoundError on a
+    # clean install even though the module was published in the wheel.
+    "pydantic>=2.0.0",
+    "python-dateutil>=2.8.2",
+    "typing-extensions>=4.7.1",
 ]
 
 [project.optional-dependencies]
@@ -72,6 +79,7 @@ addopts = "-v --cov=xyo --cov-report=term-missing --cov-report=xml"
 [tool.coverage.run]
 source = ["src/xyo"]
 omit = [
+    "*/_generated/*",
     "*/tests/*",
 ]
 
@@ -85,6 +93,9 @@ exclude_lines = [
 [tool.ruff]
 line-length = 120
 target-version = "py39"
+extend-exclude = [
+    "src/xyo/_generated",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
@@ -95,3 +106,6 @@ python_version = "3.10"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+exclude = [
+    "^src/xyo/_generated/.*$",
+]
