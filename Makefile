@@ -1,4 +1,4 @@
-.PHONY: all test lint format typecheck check build clean generate docker-build docker-test
+.PHONY: all test lint format typecheck check build clean spec-check docker-build docker-test
 
 all: check test
 
@@ -25,13 +25,8 @@ build:
 clean:
 	rm -rf dist/ build/ *.egg-info .pytest_cache .coverage coverage.xml .mypy_cache .ruff_cache
 
-generate:
-	npx -y @openapitools/openapi-generator-cli generate \
-		-i ../specs/openapi.yml \
-		-g python \
-		-o ./src/xyo/_generated \
-		--additional-properties=packageName=xyo._generated,library=httpx,generateSourceCodeOnly=true \
-		--global-property apiTests=false,modelTests=false,apiDocs=false,modelDocs=false
+spec-check:
+	python3 scripts/check_spec_coverage.py ../specs/openapi.yml
 
 docker-build:
 	docker build -t xyo-sdk-python:latest .
