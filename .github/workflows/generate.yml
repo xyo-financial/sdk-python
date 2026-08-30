@@ -62,12 +62,24 @@ jobs:
             exit 1
           fi
 
+          # .openapi-generator-ignore is hand-maintained: it is how a file the generator
+          # should not own gets protected, so it must survive the wholesale replacement
+          # below. The generator writes its own default copy at the output root rather
+          # than inside the package, so copying the package subtree alone would drop it.
+          if [ -f src/xyo/_generated/.openapi-generator-ignore ]; then
+            cp -a src/xyo/_generated/.openapi-generator-ignore /tmp/openapi-generator-ignore.keep
+          fi
+
           # Replace the tree wholesale rather than merging over it, so a model removed
           # from the specification actually disappears instead of lingering as a stale
           # type that still imports and still ships in the wheel.
           rm -rf src/xyo/_generated
           mkdir -p src/xyo/_generated
           cp -a /tmp/py-gen/xyo/_generated/. src/xyo/_generated/
+          if [ -f /tmp/openapi-generator-ignore.keep ]; then
+            cp -a /tmp/openapi-generator-ignore.keep src/xyo/_generated/.openapi-generator-ignore
+            rm -f /tmp/openapi-generator-ignore.keep
+          fi
           if [ -f /tmp/py-gen/xyo/_generated_README.md ]; then
             cp -a /tmp/py-gen/xyo/_generated_README.md src/xyo/_generated/_generated_README.md
           fi
@@ -81,6 +93,10 @@ jobs:
           fi
           if [ -e src/xyo/_generated/xyo ]; then
             echo "::error::Generator nested its output at src/xyo/_generated/xyo; check -o against packageName"
+            exit 1
+          fi
+          if [ ! -f src/xyo/_generated/.openapi-generator-ignore ]; then
+            echo "::error::.openapi-generator-ignore was lost; hand-added protections would be silently dropped"
             exit 1
           fi
           # The hand-written package __init__ carries the public exports and must survive.
