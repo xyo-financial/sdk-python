@@ -9,9 +9,9 @@
 <p align="center">
   <a href="https://pypi.org/project/xyo-sdk/"><img src="https://img.shields.io/pypi/v/xyo-sdk?style=flat-square&logo=pypi&logoColor=white&color=blue" alt="PyPI Version" /></a>
   <a href="https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml"><img src="https://github.com/xyo-financial/sdk-python/actions/workflows/makefile.yml/badge.svg?branch=main" alt="CI / Build & Test" /></a>
-  <img src="https://img.shields.io/badge/Python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-3776AB?logo=python&logoColor=white" alt="Python Versions" />
-  <img src="https://img.shields.io/badge/Typing-Strict%20MyPy-blue" alt="Strict Typing" />
-  <img src="https://img.shields.io/badge/RFC_7807-Compliant-brightgreen" alt="RFC 7807" />
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-3776AB?logo=python&logoColor=white" alt="Python Versions" /></a>
+  <a href="https://mypy-lang.org/"><img src="https://img.shields.io/badge/Typing-Strict%20MyPy-blue" alt="Strict Typing" /></a>
+  <a href="https://datatracker.ietf.org/doc/html/rfc7807"><img src="https://img.shields.io/badge/RFC_7807-Compliant-brightgreen" alt="RFC 7807" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License" /></a>
 </p>
 
