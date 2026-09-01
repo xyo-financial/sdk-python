@@ -5,17 +5,19 @@ Thank you for contributing to the official XYO Financial Python Client SDK (`sdk
 ---
 
 ## 📑 Table of Contents
-- [🏗 1. Two-Layer Architecture](#-1-two-layer-architecture)
-- [🔀 2. Contribution Workflow & Decision Matrix](#-2-contribution-workflow--decision-matrix)
-- [⚙️ 3. Automated & Local Code Generation](#️-3-automated--local-code-generation)
-- [🛠 4. Prerequisites & Development Environment](#-4-prerequisites--development-environment)
-- [🛡 5. Quality Gates & Validation](#-5-quality-gates--validation)
-- [🧪 6. Development & Testing Guide](#-6-development--testing-guide)
-- [🚀 7. Pull Request & Commit Standards](#-7-pull-request--commit-standards)
-- [📦 8. Release & Versioning Process](#-8-release--versioning-process)
-- [📄 9. License](#-9-license)
-
----
+- [🏗 1. Two-Layer Architecture](#1-two-layer-architecture)
+- [🔀 2. Contribution Workflow & Decision Matrix](#2-contribution-workflow-decision-matrix)
+- [⚙️ 3. Automated & Local Code Generation](#3-automated-local-code-generation)
+  - [🔹 Automated Regeneration (CI/CD)](#automated-regeneration-cicd)
+  - [🔹 Local Regeneration](#local-regeneration)
+  - [📋 Generated Code Policy](#generated-code-policy)
+  - [🔹 How the Wrapper Uses the Generated Layer](#how-the-wrapper-uses-the-generated-layer)
+- [🛠 4. Prerequisites & Development Environment](#4-prerequisites-development-environment)
+- [🛡 5. Quality Gates & Validation](#5-quality-gates-validation)
+- [🧪 6. Development & Testing Guide](#6-development-testing-guide)
+- [🚀 7. Pull Request & Commit Standards](#7-pull-request-commit-standards)
+- [📦 8. Release & Versioning Process](#8-release-versioning-process)
+- [📄 9. License](#9-license)
 
 ## 🏗 1. Two-Layer Architecture
 
@@ -55,10 +57,10 @@ The codebase strictly enforces a two-layer separation of concerns:
 
 ## ⚙️ 3. Automated & Local Code Generation
 
-### Automated Regeneration (CI/CD)
+### 🔹 Automated Regeneration (CI/CD)
 When an OpenAPI spec is tagged in `xyo-financial/specs`, GitHub Actions dispatches a `spec_tagged` event to `.github/workflows/generate.yml`, regenerating `src/xyo/_generated/`, running the test suite, and creating a pull request or commit.
 
-### Local Regeneration
+### 🔹 Local Regeneration
 To regenerate the client locally against a local checkout of specs:
 
 ```bash
@@ -67,7 +69,7 @@ make generate
 
 ---
 
-### Generated Code Policy
+### 📋 Generated Code Policy
 
 > [!IMPORTANT]
 > `src/xyo/_generated/` is produced by OpenAPI Generator and is committed **exactly as the generator emits it**.
@@ -84,7 +86,7 @@ If generated output is wrong, fix it at source, never in the output:
 2. Change the generator invocation in `.github/workflows/generate.yml`, if it is a generation setting.
 3. Add the file to `src/xyo/_generated/.openapi-generator-ignore`, if the generator's version of it is genuinely not the source of truth.
 
-### How the Wrapper Uses the Generated Layer
+### 🔹 How the Wrapper Uses the Generated Layer
 
 The hand-written wrapper in `src/xyo/` is the public API. It does not restate the wire contract: `models.py` parses and serialises through the generated pydantic models via `from_generated()` and `to_generated()`, so field names, casing and types come from the specification.
 
@@ -105,14 +107,14 @@ The wrapper exists to add what the generator does not provide: a sync client alo
 Before submitting a Pull Request, ensure all local verification checks pass:
 
 ```bash
-# Run test suite with coverage
+# 🤝 Run test suite with coverage
 pytest
 
-# Run linter and formatting check
+# 🤝 Run linter and formatting check
 ruff check .
 ruff format --check .
 
-# Run type checker
+# 🤝 Run type checker
 mypy src/xyo
 ```
 
